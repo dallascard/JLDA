@@ -6,8 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Collections;
 import java.util.Random;
-import java.util.HashMap;
-import java.util.TreeMap;
+import java.nio.file.Path;
 
 public class Sampler {
     int n_topics;
@@ -32,17 +31,11 @@ public class Sampler {
     int t_doc_topics[][];
 
 
-    public Sampler(float alpha, float beta, int n_topics) {
-        this.alpha = alpha;
-        this.beta = beta;
-        this.n_topics = n_topics;
-    }
-
-    public void loadData(String word_file, String doc_file, String vocab_file) throws Exception {
+    public Sampler(Path word_file, Path doc_file, Path vocab_file) throws Exception {
         JSONParser parser = new JSONParser();
-        JSONArray words = (JSONArray) parser.parse(new FileReader(word_file));
-        JSONArray docs = (JSONArray) parser.parse(new FileReader(doc_file));
-        JSONArray vocab_json = (JSONArray) parser.parse(new FileReader(vocab_file));
+        JSONArray words = (JSONArray) parser.parse(new FileReader(word_file.toString()));
+        JSONArray docs = (JSONArray) parser.parse(new FileReader(doc_file.toString()));
+        JSONArray vocab_json = (JSONArray) parser.parse(new FileReader(vocab_file.toString()));
 
         n_words = words.size();
 
@@ -74,7 +67,11 @@ public class Sampler {
 
     }
 
-    public void run(int n_topics, float alpha, float beta, int n_iter, int burn_in, int subsampling) {
+    public String[] get_vocab() {
+        return vocab;
+    }
+
+    public int[][] run(int n_topics, float alpha, float beta, int n_iter, int burn_in, int subsampling) {
         this.n_topics = n_topics;
         this.alpha = alpha;
         this.beta = beta;
@@ -110,8 +107,8 @@ public class Sampler {
         Collections.shuffle(order);
         Random rand = new Random();
 
+        System.out.println("Doing burn-in");
         for (int i=0; i < n_iter; i++) {
-            System.out.println(i);
             for (int q=0; q < n_words; q++) {
                 //double p[] = new double[n_topics];
                 double p[] = new double[n_topics];
@@ -154,16 +151,22 @@ public class Sampler {
             }
 
             if (i > burn_in) {
-                for (int k=0; k < n_topics; k++) {
-                    t_topic_counts[k] += topic_counts[k];
-                    for (int d = 0; d < n_docs; d++)
-                        t_doc_topics[d][k] += doc_topics[d][k];
-                    for (int v = 0; v < vocab_size; v++)
-                        t_vocab_topics[v][k] += vocab_topics[v][k];
+                if (i % subsampling == 0) {
+                    System.out.print(".");
+                    for (int k = 0; k < n_topics; k++) {
+                        t_topic_counts[k] += topic_counts[k];
+                        for (int d = 0; d < n_docs; d++)
+                            t_doc_topics[d][k] += doc_topics[d][k];
+                        for (int v = 0; v < vocab_size; v++)
+                            t_vocab_topics[v][k] += vocab_topics[v][k];
+                    }
                 }
             }
         }
 
+        // return final word-topic matrices
+
+        /*
         for (int k=0; k < n_topics; k++) {
             System.out.println(k);
             List<Integer> list = new ArrayList<>();
@@ -172,13 +175,16 @@ public class Sampler {
 
             Collections.sort(list);
             Collections.reverse(list);
-            int n_to_print = 20;
+            int n_to_print = 30;
             int threshold = list.get(n_to_print);
-            for (int v = 0; v < 10; v++) {
-                if (list.get(v) >= threshold)
-                    System.out.println(vocab[v] + ": " + list.get(v));
+            for (int v = 0; v < vocab_size; v++) {
+                if (t_vocab_topics[v][k] >= threshold)
+                    System.out.println(vocab[v] + ": " + t_vocab_topics[v][k]);
             }
         }
+        */
+
+        return t_vocab_topics;
     }
 
 }
