@@ -166,15 +166,17 @@ public class Sampler {
 
         for (int k=0; k < n_topics; k++) {
             System.out.println(k);
-            List<Integer> map = new TreeMap<>();
+            List<Integer> list = new ArrayList<>();
             for (int v = 0; v < vocab_size; v++)
-                map.put(vocab[v], t_vocab_topics[v][k]);
+                list.add(t_vocab_topics[v][k]);
 
-            Collections.sort(map);
-            Collections.reverse(test);
+            Collections.sort(list);
+            Collections.reverse(list);
+            int n_to_print = 20;
+            int threshold = list.get(n_to_print);
             for (int v = 0; v < 10; v++) {
-                System.out.println(test.get(v));
-                System.out.println(vocab[test.get(v)]);
+                if (list.get(v) >= threshold)
+                    System.out.println(vocab[v] + ": " + list.get(v));
             }
         }
     }
