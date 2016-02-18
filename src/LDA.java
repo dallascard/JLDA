@@ -18,7 +18,7 @@ public class LDA {
         params.put("-a", "1");                      // alpha
         params.put("-b", "1");                      // beta
         params.put("-i", "200");                    // n_iter
-        params.put("-u", "20");                     // burn_in
+        params.put("-u", "20");                     // fiexburn_in
         params.put("-s", "2");                      // subsampling
 
 
@@ -28,12 +28,16 @@ public class LDA {
                 arg = s;
             else {
                 params.put(arg, s);
+                arg = null;
             }
         }
 
-        if (params.get("-d").equals(""))
+        if (params.get("-d").equals("")) {
             System.out.println(params);
             System.exit(0);
+        }
+
+        System.out.println(params);
 
         Path word_num_file = Paths.get(params.get("-d"), "word_num.json");
         Path word_doc_file = Paths.get(params.get("-d"), "word_doc.json");
@@ -55,15 +59,15 @@ public class LDA {
         String vocab[] = sampler.get_vocab();
 
         System.out.println("Writing results to file");
-        String output_dir = "/Users/dcard/Projects/CMU/ARK/guac/datasets/mfc_v2/lda/";
+        //String output_dir = "/Users/dcard/Projects/CMU/ARK/guac/datasets/mfc_v2/lda/";
         for (int k=0; k < n_topics; k++) {
-            String output_file = output_dir + k + ".json";
+            Path output_file = Paths.get(params.get("-d"), k + ".json");
             JSONObject obj = new JSONObject();
 
             for (int v=0; v < vocab_size; v++)
                 obj.put(new String(vocab[v].getBytes("UTF-8"), "UTF-8"), word_topic_matrix[v][k]);
 
-            try (FileWriter file = new FileWriter(output_file)) {
+            try (FileWriter file = new FileWriter(output_file.toString())) {
                 file.write(obj.toJSONString());
             }
 
