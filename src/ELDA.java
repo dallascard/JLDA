@@ -3,9 +3,10 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 
 import java.io.FileWriter;
+import java.util.DoubleSummaryStatistics;
 import java.util.HashMap;
 
-public class LDA {
+public class ELDA {
 
     public static void main(String args[]) throws Exception {
 
@@ -13,12 +14,14 @@ public class LDA {
 
         // set defaults
         params.put("-d", "");  // input dir
-        params.put("-k", "50");                     // n_topics
+        params.put("-p", "20");                     // n_personas
+        params.put("-k", "40");                     // n_topics
         params.put("-a", "1");                      // alpha
         params.put("-b", "1");                      // beta
-        params.put("-i", "200");                    // n_iter
-        params.put("-u", "20");                     // fiexburn_in
-        params.put("-s", "2");                      // subsampling
+        params.put("-g", "1");                      // gamma
+        params.put("-i", "1000");                    // n_iter
+        params.put("-u", "200");                     // burn_in
+        params.put("-s", "10");                      // subsampling
 
 
         String arg = null;
@@ -38,25 +41,29 @@ public class LDA {
 
         System.out.println(params);
 
-        Path word_num_file = Paths.get(params.get("-d"), "word_num.json");
-        Path word_doc_file = Paths.get(params.get("-d"), "word_doc.json");
+        Path tuple_vocab_file = Paths.get(params.get("-d"), "tuple_vocab.json");
+        Path tuple_entity_file = Paths.get(params.get("-d"), "tuple_entity.json");
+        Path entity_doc_file = Paths.get(params.get("-d"), "entity_doc.json");
         Path vocab_file = Paths.get(params.get("-d"), "vocab.json");
+        Path docs_file = Paths.get(params.get("-d"), "docs.json");
 
-        float alpha = Float.parseFloat(params.get("-a"));
-        float beta = Float.parseFloat(params.get("-b"));
+        double alpha = Double.parseDouble(params.get("-a"));
+        double beta = Double.parseDouble(params.get("-b"));
+        double gamma = Double.parseDouble(params.get("-g"));
         int n_topics = Integer.parseInt(params.get("-k"));
+        int n_personas = Integer.parseInt(params.get("-p"));
 
         int n_iter = Integer.parseInt(params.get("-i"));
         int burn_in = Integer.parseInt(params.get("-u"));
         int subsampling = Integer.parseInt(params.get("-s"));
 
-        LDASampler LDASampler = new LDASampler(word_num_file, word_doc_file, vocab_file);
-        int word_topic_matrix[][] = LDASampler.run(n_topics, alpha, beta, n_iter, burn_in, subsampling);
-        int vocab_size = (int) word_topic_matrix.length;
+        ELDASampler sampler = new ELDASampler(entity_doc_file, tuple_vocab_file, tuple_entity_file, vocab_file, docs_file);
+        int topic_word_matrix[][] = sampler.run(n_personas, n_topics, alpha, beta, gamma, n_iter, burn_in, subsampling);
+        String vocab[] = sampler.get_vocab();
+        int vocab_size = (int) vocab.length;
         System.out.println(vocab_size);
 
-        String vocab[] = LDASampler.get_vocab();
-
+        /*
         System.out.println("Writing results to file");
         //String output_dir = "/Users/dcard/Projects/CMU/ARK/guac/datasets/mfc_v2/lda/";
         for (int k=0; k < n_topics; k++) {
@@ -71,6 +78,7 @@ public class LDA {
             }
 
         }
+        */
 
     }
 

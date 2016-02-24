@@ -8,7 +8,7 @@ import java.util.Collections;
 import java.util.Random;
 import java.nio.file.Path;
 
-public class Sampler {
+public class LDASampler {
     int n_topics;
     float alpha;
     float beta;
@@ -31,7 +31,7 @@ public class Sampler {
     int t_doc_topics[][];
 
 
-    public Sampler(Path word_file, Path doc_file, Path vocab_file) throws Exception {
+    public LDASampler(Path word_file, Path doc_file, Path vocab_file) throws Exception {
         JSONParser parser = new JSONParser();
         JSONArray words = (JSONArray) parser.parse(new FileReader(word_file.toString()));
         JSONArray docs = (JSONArray) parser.parse(new FileReader(doc_file.toString()));
