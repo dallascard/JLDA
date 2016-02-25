@@ -49,8 +49,11 @@ public class ELDASampler {
         JSONArray docs_json = (JSONArray) parser.parse(new FileReader(doc_file.toString()));
 
         n_tuples = tuple_vocab_json.size();
+        System.out.println("n_tuples=" + n_tuples);
         n_entities = entity_doc_json.size();
+        System.out.println("n_entities=" + n_entities);
 
+        // transfer entity to document mapping from json to array, and count the number of documents
         n_docs = 0;
         entity_doc = new int[n_entities];
         for (int i = 0; i < n_entities; i++) {
@@ -62,7 +65,6 @@ public class ELDASampler {
         n_docs += 1;  // one larger than largest index
 
         vocab_size = 0;
-        entity_doc = new int[n_entities];
         tuple_vocab = new int[n_tuples];
         tuple_entity = new int[n_tuples];
         entity_tuples = new HashMap<>();
@@ -291,8 +293,10 @@ public class ELDASampler {
 
             Collections.sort(list);
             Collections.reverse(list);
-            int n_to_print = 30;
+            int n_to_print = 10;
             int threshold = list.get(n_to_print);
+            if (threshold < 6)
+                threshold = 6;
             for (int v = 0; v < vocab_size; v++) {
                 if (t_topic_vocab_counts[k][v] >= threshold)
                     System.out.println(vocab[v] + ": " + t_topic_vocab_counts[k][v]);
