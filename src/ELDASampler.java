@@ -64,9 +64,11 @@ public class ELDASampler {
         }
         n_docs += 1;  // one larger than largest index
 
+        // transfer the tuple-vocab and tuple-entity mappings to arrays and count the vocabulary size
         vocab_size = 0;
         tuple_vocab = new int[n_tuples];
         tuple_entity = new int[n_tuples];
+        // also record all the tuples associated with each entity
         entity_tuples = new HashMap<>();
 
         for (int i = 0; i < n_tuples; i++) {
@@ -75,12 +77,13 @@ public class ELDASampler {
             if (tuple_vocab[i] > vocab_size) {
                 vocab_size = tuple_vocab[i];
             }
-            // make a list of the associated tuples for each entity
+            // if we haven't seen this entity before, make a new list for it
             if (entity_tuples.get(tuple_entity[i]) == null) {
                 List<Integer> tuples = new ArrayList<>();
                 tuples.add(i);
                 entity_tuples.put(tuple_entity[i], tuples);
             }
+            // otherwise, add this tuple to the appropriate list
             else {
                 // probably a better way to do this...
                 List<Integer> tuples = entity_tuples.get(tuple_entity[i]);
@@ -162,6 +165,7 @@ public class ELDASampler {
             topic_tuple_counts[k] += 1;
         }
 
+        // Determine random orders in which to visit the entities and tuples
         List<Integer> entity_order = new ArrayList<>();
         for (int i = 0; i < n_entities; i++) {
             entity_order.add(i);
@@ -173,8 +177,30 @@ public class ELDASampler {
             tuple_order.add(i);
         }
         Collections.shuffle(tuple_order);
-        Random rand = new Random();
 
+
+        for (int k=0; k < n_topics; k++) {
+            System.out.println("**" + k + "**");
+            List<Integer> list = new ArrayList<>();
+            for (int v = 0; v < vocab_size; v++)
+                list.add(topic_vocab_counts[k][v]);
+
+            Collections.sort(list);
+            Collections.reverse(list);
+            int n_to_print = 5;
+            int threshold = list.get(n_to_print);
+            if (threshold < 6)
+                threshold = 6;
+            for (int v = 0; v < vocab_size; v++) {
+                if (topic_vocab_counts[k][v] >= threshold)
+                    System.out.println(vocab[v] + ": " + topic_vocab_counts[k][v]);
+            }
+            System.out.println("");
+        }
+
+        //Random rand = new Random();
+
+        // start sampling
         System.out.println("Doing burn-in");
         for (int i=0; i < n_iter; i++) {
             // first sample personas
@@ -196,8 +222,11 @@ public class ELDASampler {
                     persona_tuple_counts[p_e] -= 1;
 
                     for (int p=0; p < n_personas; p++) {
-                        pr[p] *= (persona_topic_counts[p][topic_t] + beta) / (double) (persona_tuple_counts[p] + beta * n_topics);
+                        pr[p] *= (persona_topic_counts[p][topic_t] + beta) / (persona_tuple_counts[p] + beta * n_topics);
                     }
+                    // add the subtracted counts back in so that they don't affect the next tuple
+                    persona_topic_counts[p_e][topic_t] += 1;
+                    persona_tuple_counts[p_e] += 1;
                 }
 
                 double p_sum = 0;
@@ -206,7 +235,7 @@ public class ELDASampler {
                     p_sum += pr[p];
                 }
 
-                double f = rand.nextDouble() * p_sum;
+                double f = ThreadLocalRandom.current().nextDouble() * p_sum;
                 int p = 0;
                 double temp = pr[p];
                 while (f > temp) {
@@ -218,14 +247,14 @@ public class ELDASampler {
                 document_persona_counts[d_e][p] += 1;
                 for (int t : tuples) {
                     int topic_t = tuple_topics[t];
+                    // transfer the persona topic counts to the new persona
+                    persona_topic_counts[p_e][topic_t] -= 1;
                     persona_topic_counts[p][topic_t] += 1;
-                    persona_tuple_counts[p] += 1;
                 }
             }
 
             // then sample topics
             for (int q=0; q < n_tuples; q++) {
-                //double p[] = new double[n_topics];
                 double pr[] = new double[n_topics];
                 int j = tuple_order.get(q);
                 int e_j = tuple_entity[j];
@@ -241,13 +270,13 @@ public class ELDASampler {
                 // compute probabilities
                 double p_sum = 0;
                 for (int k = 0; k < n_topics; k++) {
-                    pr[k] = (persona_topic_counts[p_j][k] + beta) * (topic_vocab_counts[k][v_j] + gamma) / (double) (topic_tuple_counts[k] + gamma * vocab_size);
+                    pr[k] = (persona_topic_counts[p_j][k] + beta) * (topic_vocab_counts[k][v_j] + gamma) / (topic_tuple_counts[k] + gamma * vocab_size);
                     assert pr[k] > 0;
                     p_sum += pr[k];
                 }
 
                 // sample a topic
-                double f = rand.nextDouble() * p_sum;
+                double f = ThreadLocalRandom.current().nextDouble() * p_sum;
                 int k = 0;
                 double temp = pr[k];
                 while (f > temp) {
@@ -262,6 +291,7 @@ public class ELDASampler {
 
             }
 
+            // keep running sums of the selected samples
             if (i > burn_in) {
                 if (i % subsampling == 0) {
                     System.out.print(".");

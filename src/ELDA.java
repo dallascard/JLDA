@@ -16,9 +16,9 @@ public class ELDA {
         params.put("-a", "1");                      // alpha
         params.put("-b", "1");                      // beta
         params.put("-g", "1");                      // gamma
-        params.put("-i", "1000");                    // n_iter
-        params.put("-u", "200");                     // burn_in
-        params.put("-s", "10");                      // subsampling
+        params.put("-i", "6000");                    // n_iter
+        params.put("-u", "1000");                     // burn_in
+        params.put("-s", "50");                      // subsampling
 
 
         String arg = null;
