@@ -150,16 +150,18 @@ public class LDASampler {
 
             }
 
-            if (i > burn_in) {
-                if (i % subsampling == 0) {
+
+            if (i % subsampling == 0) {
+                if (i > burn_in)
                     System.out.print(".");
-                    for (int k = 0; k < n_topics; k++) {
-                        t_topic_counts[k] += topic_counts[k];
-                        for (int d = 0; d < n_docs; d++)
-                            t_doc_topics[d][k] += doc_topics[d][k];
-                        for (int v = 0; v < vocab_size; v++)
-                            t_vocab_topics[v][k] += vocab_topics[v][k];
-                    }
+                else
+                    System.out.print("-");
+                for (int k = 0; k < n_topics; k++) {
+                    t_topic_counts[k] += topic_counts[k];
+                    for (int d = 0; d < n_docs; d++)
+                        t_doc_topics[d][k] += doc_topics[d][k];
+                    for (int v = 0; v < vocab_size; v++)
+                        t_vocab_topics[v][k] += vocab_topics[v][k];
                 }
             }
         }

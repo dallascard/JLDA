@@ -152,6 +152,8 @@ public class ELDASampler {
             document_persona_counts[d_e][p] += 1;
         }
 
+        System.out.println(n_entities + " entities");
+
         for (int j=0; j < n_tuples; j++) {
             int v_j = tuple_vocab[j];
             int e_j = tuple_entity[j];
@@ -165,20 +167,22 @@ public class ELDASampler {
             topic_tuple_counts[k] += 1;
         }
 
+        System.out.println(n_tuples + " tuples");
+
         // Determine random orders in which to visit the entities and tuples
         List<Integer> entity_order = new ArrayList<>();
         for (int i = 0; i < n_entities; i++) {
             entity_order.add(i);
         }
-        Collections.shuffle(entity_order);
+        //Collections.shuffle(entity_order);
 
         List<Integer> tuple_order = new ArrayList<>();
         for (int i = 0; i < n_tuples; i++) {
             tuple_order.add(i);
         }
-        Collections.shuffle(tuple_order);
+        //Collections.shuffle(tuple_order);
 
-
+        /*
         for (int k=0; k < n_topics; k++) {
             System.out.println("**" + k + "**");
             List<Integer> list = new ArrayList<>();
@@ -197,12 +201,14 @@ public class ELDASampler {
             }
             System.out.println("");
         }
+        */
 
-        //Random rand = new Random();
+        Random rand = new Random();
 
         // start sampling
         System.out.println("Doing burn-in");
         for (int i=0; i < n_iter; i++) {
+
             // first sample personas
             for (int q=0; q < n_entities; q++) {
                 double pr[] = new double[n_personas];
@@ -271,12 +277,13 @@ public class ELDASampler {
                 double p_sum = 0;
                 for (int k = 0; k < n_topics; k++) {
                     pr[k] = (persona_topic_counts[p_j][k] + beta) * (topic_vocab_counts[k][v_j] + gamma) / (topic_tuple_counts[k] + gamma * vocab_size);
+                    //pr[k] = (topic_vocab_counts[k][v_j] + gamma) / (topic_tuple_counts[k] + gamma * vocab_size);
                     assert pr[k] > 0;
                     p_sum += pr[k];
                 }
 
                 // sample a topic
-                double f = ThreadLocalRandom.current().nextDouble() * p_sum;
+                double f = rand.nextDouble() * p_sum;
                 int k = 0;
                 double temp = pr[k];
                 while (f > temp) {
@@ -330,6 +337,20 @@ public class ELDASampler {
             for (int v = 0; v < vocab_size; v++) {
                 if (t_topic_vocab_counts[k][v] >= threshold)
                     System.out.println(vocab[v] + ": " + t_topic_vocab_counts[k][v]);
+            }
+            System.out.println("");
+        }
+
+        for (int p=0; p < n_personas; p++) {
+            System.out.println("** persona " + p + "**");
+            List<Integer> list = new ArrayList<>();
+            for (int k = 0; k < n_topics; k++)
+                list.add(t_persona_topic_counts[p][k]);
+
+            Collections.sort(list);
+            Collections.reverse(list);
+            for (int k = 0; k < n_topics; k++) {
+               System.out.println(k + ": " + t_persona_topic_counts[p][k]);
             }
             System.out.println("");
         }

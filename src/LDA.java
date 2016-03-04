@@ -16,9 +16,9 @@ public class LDA {
         params.put("-k", "50");                     // n_topics
         params.put("-a", "1");                      // alpha
         params.put("-b", "1");                      // beta
-        params.put("-i", "200");                    // n_iter
-        params.put("-u", "20");                     // fiexburn_in
-        params.put("-s", "2");                      // subsampling
+        params.put("-i", "5000");                    // n_iter
+        params.put("-u", "1000");                     // fiexburn_in
+        params.put("-s", "10");                      // subsampling
 
 
         String arg = null;

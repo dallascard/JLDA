@@ -11,14 +11,14 @@ public class ELDA {
 
         // set defaults
         params.put("-d", "");  // input dir
-        params.put("-p", "20");                     // n_personas
-        params.put("-k", "40");                     // n_topics
+        params.put("-p", "25");                     // n_personas
+        params.put("-k", "25");                     // n_topics
         params.put("-a", "1");                      // alpha
         params.put("-b", "1");                      // beta
         params.put("-g", "1");                      // gamma
-        params.put("-i", "6000");                    // n_iter
+        params.put("-i", "3000");                    // n_iter
         params.put("-u", "1000");                     // burn_in
-        params.put("-s", "50");                      // subsampling
+        params.put("-s", "25");                      // subsampling
 
 
         String arg = null;
