@@ -168,7 +168,6 @@ public class LDASampler {
 
         // return final word-topic matrices
 
-        /*
         for (int k=0; k < n_topics; k++) {
             System.out.println(k);
             List<Integer> list = new ArrayList<>();
@@ -177,14 +176,13 @@ public class LDASampler {
 
             Collections.sort(list);
             Collections.reverse(list);
-            int n_to_print = 30;
+            int n_to_print = 3;
             int threshold = list.get(n_to_print);
             for (int v = 0; v < vocab_size; v++) {
                 if (t_vocab_topics[v][k] >= threshold)
                     System.out.println(vocab[v] + ": " + t_vocab_topics[v][k]);
             }
         }
-        */
 
         return t_vocab_topics;
     }

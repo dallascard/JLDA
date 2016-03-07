@@ -218,7 +218,7 @@ public class ELDASampler {
 
                 document_persona_counts[d_e][p_e] -= 1;
                 for (int p=0; p < n_personas; p++) {
-                    pr[p] = document_persona_counts[d_e][p] + alpha;
+                    pr[p] = Math.log(document_persona_counts[d_e][p] + alpha);
                 }
                 List<Integer> tuples = entity_tuples.get(e);
                 assert tuples != null;
@@ -228,7 +228,7 @@ public class ELDASampler {
                     persona_tuple_counts[p_e] -= 1;
 
                     for (int p=0; p < n_personas; p++) {
-                        pr[p] *= (persona_topic_counts[p][topic_t] + beta) / (persona_tuple_counts[p] + beta * n_topics);
+                        pr[p] += Math.log(persona_topic_counts[p][topic_t] + beta) - Math.log(persona_tuple_counts[p] + beta * n_topics);
                     }
                     // add the subtracted counts back in so that they don't affect the next tuple
                     persona_topic_counts[p_e][topic_t] += 1;
@@ -237,11 +237,15 @@ public class ELDASampler {
 
                 double p_sum = 0;
                 for (int p=0; p < n_personas; p++) {
-                    assert pr[p] > 0;
+                    pr[p] = Math.exp(pr[p]);
                     p_sum += pr[p];
                 }
 
-                double f = ThreadLocalRandom.current().nextDouble() * p_sum;
+                for (int p=0; p < n_personas; p++) {
+                    pr[p] = pr[p]/p_sum;
+                }
+
+                double f = ThreadLocalRandom.current().nextDouble();
                 int p = 0;
                 double temp = pr[p];
                 while (f > temp) {
@@ -255,7 +259,9 @@ public class ELDASampler {
                     int topic_t = tuple_topics[t];
                     // transfer the persona topic counts to the new persona
                     persona_topic_counts[p_e][topic_t] -= 1;
+                    persona_tuple_counts[p_e] -= 1;
                     persona_topic_counts[p][topic_t] += 1;
+                    persona_tuple_counts[p] += 1;
                 }
             }
 
@@ -330,10 +336,8 @@ public class ELDASampler {
 
             Collections.sort(list);
             Collections.reverse(list);
-            int n_to_print = 10;
+            int n_to_print = 6;
             int threshold = list.get(n_to_print);
-            if (threshold < 6)
-                threshold = 6;
             for (int v = 0; v < vocab_size; v++) {
                 if (t_topic_vocab_counts[k][v] >= threshold)
                     System.out.println(vocab[v] + ": " + t_topic_vocab_counts[k][v]);
@@ -344,13 +348,15 @@ public class ELDASampler {
         for (int p=0; p < n_personas; p++) {
             System.out.println("** persona " + p + "**");
             List<Integer> list = new ArrayList<>();
-            for (int k = 0; k < n_topics; k++)
+            for (int k = 0; k < n_personas; k++)
                 list.add(t_persona_topic_counts[p][k]);
-
             Collections.sort(list);
             Collections.reverse(list);
-            for (int k = 0; k < n_topics; k++) {
-               System.out.println(k + ": " + t_persona_topic_counts[p][k]);
+            int n_to_print = 2;
+            int threshold = list.get(n_to_print);
+            for (int k = 0; k < n_personas; k++) {
+                if (t_persona_topic_counts[p][k] >= threshold)
+                    System.out.println(k + ": " + t_persona_topic_counts[p][k]);
             }
             System.out.println("");
         }
