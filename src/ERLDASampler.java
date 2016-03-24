@@ -5,7 +5,8 @@ import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 import java.nio.file.Path;
 
-public class ELDASampler {
+
+public class ERLDASampler {
     int n_personas;
     int n_topics;
     double alpha;
@@ -16,10 +17,12 @@ public class ELDASampler {
     int n_tuples;
     int n_docs;
     int n_entities;
+    int n_roles;
 
     int entity_doc[];
     int tuple_vocab[];
     int tuple_entity[];
+    int tuple_role[];
     HashMap<Integer, List<Integer>> entity_tuples;
     String vocab[];
     String docs[];
@@ -28,23 +31,24 @@ public class ELDASampler {
     int tuple_topics[];
 
     int document_persona_counts[][];
-    int persona_topic_counts[][];
+    int persona_role_topic_counts[][][];
     int topic_vocab_counts[][];
-    int persona_tuple_counts[];
+    int persona_role_counts[][];
     int topic_tuple_counts[];
 
     int t_document_persona_counts[][];
-    int t_persona_topic_counts[][];
+    int t_persona_role_topic_counts[][][];
     int t_topic_vocab_counts[][];
-    int t_persona_tuple_counts[];
+    int t_persona_role_counts[][];
     int t_topic_tuple_counts[];
 
 
-    public ELDASampler(Path entity_doc_file, Path tuple_vocab_file, Path tuple_entity_file, Path vocab_file, Path doc_file) throws Exception {
+    public ERLDASampler(Path entity_doc_file, Path tuple_vocab_file, Path tuple_entity_file, Path tuple_role_file, Path vocab_file, Path doc_file) throws Exception {
         JSONParser parser = new JSONParser();
         JSONArray entity_doc_json = (JSONArray) parser.parse(new FileReader(entity_doc_file.toString()));
         JSONArray tuple_vocab_json = (JSONArray) parser.parse(new FileReader(tuple_vocab_file.toString()));
         JSONArray tuple_entity_json = (JSONArray) parser.parse(new FileReader(tuple_entity_file.toString()));
+        JSONArray tuple_role_json = (JSONArray) parser.parse(new FileReader(tuple_role_file.toString()));
         JSONArray vocab_json = (JSONArray) parser.parse(new FileReader(vocab_file.toString()));
         JSONArray docs_json = (JSONArray) parser.parse(new FileReader(doc_file.toString()));
 
@@ -66,16 +70,22 @@ public class ELDASampler {
 
         // transfer the tuple-vocab and tuple-entity mappings to arrays and count the vocabulary size
         vocab_size = 0;
+        n_roles = 0;
         tuple_vocab = new int[n_tuples];
         tuple_entity = new int[n_tuples];
+        tuple_role = new int[n_tuples];
         // also record all the tuples associated with each entity
         entity_tuples = new HashMap<>();
 
         for (int i = 0; i < n_tuples; i++) {
             tuple_vocab[i] = ((Long) tuple_vocab_json.get(i)).intValue();
             tuple_entity[i] = ((Long) tuple_entity_json.get(i)).intValue();
+            tuple_role[i] = ((Long) tuple_role_json.get(i)).intValue();
             if (tuple_vocab[i] > vocab_size) {
                 vocab_size = tuple_vocab[i];
+            }
+            if (tuple_role[i] > n_roles) {
+                n_roles = tuple_role[i];
             }
             // if we haven't seen this entity before, make a new list for it
             if (entity_tuples.get(tuple_entity[i]) == null) {
@@ -93,6 +103,7 @@ public class ELDASampler {
 
         }
         vocab_size += 1;  // one larger than largest index
+        n_roles += 1;
 
         vocab = new String[vocab_size];
         for (int i = 0; i < vocab_size; i++) {
@@ -133,15 +144,15 @@ public class ELDASampler {
         entity_personas = new int[n_entities];
         tuple_topics = new int[n_tuples];
         document_persona_counts = new int[n_docs][n_personas];
-        persona_topic_counts = new int[n_personas][n_topics];
+        persona_role_topic_counts = new int[n_personas][n_roles][n_topics];
         topic_vocab_counts = new int[n_topics][vocab_size];
-        persona_tuple_counts = new int[n_personas];
+        persona_role_counts = new int[n_personas][n_roles];
         topic_tuple_counts = new int[n_topics];
 
         t_document_persona_counts = new int[n_docs][n_personas];
-        t_persona_topic_counts = new int[n_personas][n_topics];
+        t_persona_role_topic_counts = new int[n_personas][n_roles][n_topics];
         t_topic_vocab_counts = new int[n_topics][vocab_size];
-        t_persona_tuple_counts = new int[n_personas];
+        t_persona_role_counts = new int[n_personas][n_roles];
         t_topic_tuple_counts = new int[n_topics];
 
         // do random initalization
@@ -157,13 +168,14 @@ public class ELDASampler {
         for (int j=0; j < n_tuples; j++) {
             int v_j = tuple_vocab[j];
             int e_j = tuple_entity[j];
+            int r_j = tuple_role[j];
             int p_j = entity_personas[e_j];
             int k = ThreadLocalRandom.current().nextInt(0, n_topics);
 
             tuple_topics[j] = k;
-            persona_topic_counts[p_j][k] += 1;
+            persona_role_topic_counts[p_j][r_j][k] += 1;
             topic_vocab_counts[k][v_j] += 1;
-            persona_tuple_counts[p_j] += 1;
+            persona_role_counts[p_j][r_j] += 1;
             topic_tuple_counts[k] += 1;
         }
 
@@ -224,15 +236,17 @@ public class ELDASampler {
                 assert tuples != null;
                 for (int t : tuples) {
                     int topic_t = tuple_topics[t];
-                    persona_topic_counts[p_e][topic_t] -= 1;
-                    persona_tuple_counts[p_e] -= 1;
+                    int role_t = tuple_role[t];
+
+                    persona_role_topic_counts[p_e][role_t][topic_t] -= 1;
+                    persona_role_counts[p_e][role_t] -= 1;
 
                     for (int p=0; p < n_personas; p++) {
-                        pr[p] += Math.log(persona_topic_counts[p][topic_t] + beta) - Math.log(persona_tuple_counts[p] + beta * n_topics);
+                        pr[p] += Math.log(persona_role_topic_counts[p][role_t][topic_t] + beta) - Math.log(persona_role_counts[p][role_t] + beta * n_topics);
                     }
                     // add the subtracted counts back in so that they don't affect the next tuple
-                    persona_topic_counts[p_e][topic_t] += 1;
-                    persona_tuple_counts[p_e] += 1;
+                    persona_role_topic_counts[p_e][role_t][topic_t] += 1;
+                    persona_role_counts[p_e][role_t] += 1;
                 }
 
                 double p_sum = 0;
@@ -257,11 +271,12 @@ public class ELDASampler {
                 document_persona_counts[d_e][p] += 1;
                 for (int t : tuples) {
                     int topic_t = tuple_topics[t];
+                    int role_t = tuple_role[t];
                     // transfer the persona topic counts to the new persona
-                    persona_topic_counts[p_e][topic_t] -= 1;
-                    persona_tuple_counts[p_e] -= 1;
-                    persona_topic_counts[p][topic_t] += 1;
-                    persona_tuple_counts[p] += 1;
+                    persona_role_topic_counts[p_e][role_t][topic_t] -= 1;
+                    persona_role_counts[p_e][role_t] -= 1;
+                    persona_role_topic_counts[p][role_t][topic_t] += 1;
+                    persona_role_counts[p][role_t] += 1;
                 }
             }
 
@@ -271,18 +286,19 @@ public class ELDASampler {
                 int j = tuple_order.get(q);
                 int e_j = tuple_entity[j];
                 int z_j = tuple_topics[j];
+                int r_j = tuple_role[j];
                 int v_j = tuple_vocab[j];
                 int p_j = entity_personas[e_j];
 
                 // remove the counts for this word
-                persona_topic_counts[p_j][z_j] -= 1;
+                persona_role_topic_counts[p_j][r_j][z_j] -= 1;
                 topic_vocab_counts[z_j][v_j] -= 1;
                 topic_tuple_counts[z_j] -= 1;
 
                 // compute probabilities
                 double p_sum = 0;
                 for (int k = 0; k < n_topics; k++) {
-                    pr[k] = (persona_topic_counts[p_j][k] + beta) * (topic_vocab_counts[k][v_j] + gamma) / (topic_tuple_counts[k] + gamma * vocab_size);
+                    pr[k] = (persona_role_topic_counts[p_j][r_j][k] + beta) * (topic_vocab_counts[k][v_j] + gamma) / (topic_tuple_counts[k] + gamma * vocab_size);
                     //pr[k] = (topic_vocab_counts[k][v_j] + gamma) / (topic_tuple_counts[k] + gamma * vocab_size);
                     assert pr[k] > 0;
                     p_sum += pr[k];
@@ -298,7 +314,7 @@ public class ELDASampler {
                 }
 
                 tuple_topics[j] = k;
-                persona_topic_counts[p_j][k] += 1;
+                persona_role_topic_counts[p_j][r_j][k] += 1;
                 topic_vocab_counts[k][v_j] += 1;
                 topic_tuple_counts[k] += 1;
 
@@ -309,9 +325,11 @@ public class ELDASampler {
                 if (i % subsampling == 0) {
                     System.out.print("-");
                     for (int p = 0; p < n_personas; p++) {
-                        t_persona_tuple_counts[p] += persona_tuple_counts[p];
-                        for (int k = 0; k < n_topics; k++) {
-                            t_persona_topic_counts[p][k] += persona_topic_counts[p][k];
+                        for (int r = 0; r < n_roles; r++) {
+                            t_persona_role_counts[p][r] += persona_role_counts[p][r];
+                            for (int k = 0; k < n_topics; k++) {
+                                t_persona_role_topic_counts[p][r][k] += persona_role_topic_counts[p][r][k];
+                            }
                         }
                         for (int d = 0; d < n_docs; d++) {
                             t_document_persona_counts[d][p] += document_persona_counts[d][p];

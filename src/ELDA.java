@@ -40,6 +40,7 @@ public class ELDA {
 
         Path tuple_vocab_file = Paths.get(params.get("-d"), "tuple_vocab.json");
         Path tuple_entity_file = Paths.get(params.get("-d"), "tuple_entity.json");
+        Path tuple_role_file = Paths.get(params.get("-d"), "tuple_role.json");
         Path entity_doc_file = Paths.get(params.get("-d"), "entity_doc.json");
         Path vocab_file = Paths.get(params.get("-d"), "vocab.json");
         Path docs_file = Paths.get(params.get("-d"), "docs.json");
@@ -54,7 +55,8 @@ public class ELDA {
         int burn_in = Integer.parseInt(params.get("-u"));
         int subsampling = Integer.parseInt(params.get("-s"));
 
-        ELDASampler sampler = new ELDASampler(entity_doc_file, tuple_vocab_file, tuple_entity_file, vocab_file, docs_file);
+        //ELDASampler sampler = new ELDASampler(entity_doc_file, tuple_vocab_file, tuple_entity_file, vocab_file, docs_file);
+        ERLDASampler sampler = new ERLDASampler(entity_doc_file, tuple_vocab_file, tuple_entity_file, tuple_role_file, vocab_file, docs_file);
         int topic_word_matrix[][] = sampler.run(n_personas, n_topics, alpha, beta, gamma, n_iter, burn_in, subsampling);
         String vocab[] = sampler.get_vocab();
         int vocab_size = (int) vocab.length;
