@@ -102,13 +102,13 @@ public class ELDA {
                 int n_printed = 0;
                 for (int v = 0; v < vocab_size; v++) {
                     if (persona_word_matrix[p][v] >= threshold) {
-                        file.write(vocab[v] + ": " + persona_word_matrix[p][v]);
+                        file.write(vocab[v] + ": " + persona_word_matrix[p][v] + "\n");
                         n_printed += 1;
                         if (n_printed >= n_to_print)
                             v = vocab_size;
                     }
                 }
-                file.write("");
+                file.write("\n");
             }
         }
 
