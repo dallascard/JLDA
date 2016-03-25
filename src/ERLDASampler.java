@@ -381,7 +381,7 @@ public class ERLDASampler {
             for (int v = 0; v < vocab_size; v++) {
                 for (int r = 0; r < n_roles; r++) {
                     if (t_persona_role_vocab_counts[p][r][v] >= threshold) {
-                        System.out.println(r + ':' + vocab[v] + ": " + t_persona_role_vocab_counts[p][v]);
+                        System.out.println(r + ':' + vocab[v] + ": " + t_persona_role_vocab_counts[p][r][v]);
                         n_printed += 1;
                         if (n_printed >= n_to_print)
                             v = vocab_size;
