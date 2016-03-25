@@ -1,7 +1,11 @@
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.io.FileWriter;
+import java.util.List;
+
 import org.json.simple.JSONObject;
 
 public class ELDA {
@@ -81,8 +85,32 @@ public class ELDA {
             try (FileWriter file = new FileWriter(output_file.toString())) {
                 file.write(obj.toJSONString());
             }
-
         }
-    }
 
+        Path output_file = Paths.get(params.get("-o"), "summary.txt");
+        try (FileWriter file = new FileWriter(output_file.toString())) {
+            for (int p=0; p < n_personas; p++) {
+                file.write("**" + p + "**\n");
+                List<Integer> list = new ArrayList<>();
+                for (int v = 0; v < vocab_size; v++)
+                    list.add(persona_word_matrix[p][v]);
+
+                Collections.sort(list);
+                Collections.reverse(list);
+                int n_to_print = 10;
+                int threshold = list.get(n_to_print);
+                int n_printed = 0;
+                for (int v = 0; v < vocab_size; v++) {
+                    if (persona_word_matrix[p][v] >= threshold) {
+                        file.write(vocab[v] + ": " + persona_word_matrix[p][v]);
+                        n_printed += 1;
+                        if (n_printed >= n_to_print)
+                            v = vocab_size;
+                    }
+                }
+                file.write("");
+            }
+        }
+
+    }
 }
