@@ -35,14 +35,14 @@ public class ERLDASampler {
     int topic_vocab_counts[][];
     int persona_role_counts[][];
     int topic_tuple_counts[];
-    int persona_vocab_counts[][];
+    int persona_role_vocab_counts[][][];
 
     int t_document_persona_counts[][];
     int t_persona_role_topic_counts[][][];
     int t_topic_vocab_counts[][];
     int t_persona_role_counts[][];
     int t_topic_tuple_counts[];
-    int t_persona_vocab_counts[][];
+    int t_persona_role_vocab_counts[][][];
 
 
     public ERLDASampler(Path entity_doc_file, Path tuple_vocab_file, Path tuple_entity_file, Path tuple_role_file, Path vocab_file, Path doc_file) throws Exception {
@@ -150,14 +150,14 @@ public class ERLDASampler {
         topic_vocab_counts = new int[n_topics][vocab_size];
         persona_role_counts = new int[n_personas][n_roles];
         topic_tuple_counts = new int[n_topics];
-        persona_vocab_counts = new int[n_personas][vocab_size];
+        persona_role_vocab_counts = new int[n_personas][n_roles][vocab_size];
 
         t_document_persona_counts = new int[n_docs][n_personas];
         t_persona_role_topic_counts = new int[n_personas][n_roles][n_topics];
         t_topic_vocab_counts = new int[n_topics][vocab_size];
         t_persona_role_counts = new int[n_personas][n_roles];
         t_topic_tuple_counts = new int[n_topics];
-        t_persona_vocab_counts = new int[n_personas][vocab_size];
+        t_persona_role_vocab_counts = new int[n_personas][n_roles][vocab_size];
 
         // do random initalization
         for (int e=0; e < n_entities; e++) {
@@ -181,7 +181,7 @@ public class ERLDASampler {
             topic_vocab_counts[k][v_j] += 1;
             persona_role_counts[p_j][r_j] += 1;
             topic_tuple_counts[k] += 1;
-            persona_vocab_counts[p_j][v_j] += 1;
+            persona_role_vocab_counts[p_j][r_j][v_j] += 1;
         }
 
         System.out.println(n_tuples + " tuples");
@@ -285,8 +285,8 @@ public class ERLDASampler {
 
                     // update counts of words assoicated with each persona
                     int v_t = tuple_vocab[t];
-                    persona_vocab_counts[p_e][v_t] -= 1;
-                    persona_vocab_counts[p][v_t] += 1;
+                    persona_role_vocab_counts[p_e][role_t][v_t] -= 1;
+                    persona_role_vocab_counts[p][role_t][v_t] += 1;
                 }
 
             }
@@ -341,9 +341,10 @@ public class ERLDASampler {
                             for (int k = 0; k < n_topics; k++) {
                                 t_persona_role_topic_counts[p][r][k] += persona_role_topic_counts[p][r][k];
                             }
+                            for (int v = 0; v < vocab_size; v++)
+                                t_persona_role_vocab_counts[p][r][v] += persona_role_vocab_counts[p][r][v];
+
                         }
-                        for (int v = 0; v < vocab_size; v++)
-                            t_persona_vocab_counts[p][v] += persona_vocab_counts[p][v];
                         for (int d = 0; d < n_docs; d++) {
                             t_document_persona_counts[d][p] += document_persona_counts[d][p];
                         }
@@ -367,8 +368,10 @@ public class ERLDASampler {
         for (int p=0; p < n_personas; p++) {
             System.out.println("**" + p + "**");
             List<Integer> list = new ArrayList<>();
-            for (int v = 0; v < vocab_size; v++)
-                list.add(t_persona_vocab_counts[p][v]);
+            for (int v = 0; v < vocab_size; v++) {
+                for (int r = 0; r < n_roles; r++)
+                    list.add(t_persona_role_vocab_counts[p][r][v]);
+            }
 
             Collections.sort(list);
             Collections.reverse(list);
@@ -376,11 +379,13 @@ public class ERLDASampler {
             int threshold = list.get(n_to_print);
             int n_printed = 0;
             for (int v = 0; v < vocab_size; v++) {
-                if (t_persona_vocab_counts[p][v] >= threshold) {
-                    System.out.println(vocab[v] + ": " + t_persona_vocab_counts[p][v]);
-                    n_printed += 1;
-                    if (n_printed >= n_to_print)
-                        v = vocab_size;
+                for (int r = 0; r < n_roles; r++) {
+                    if (t_persona_role_vocab_counts[p][r][v] >= threshold) {
+                        System.out.println(r + ':' + vocab[v] + ": " + t_persona_role_vocab_counts[p][v]);
+                        n_printed += 1;
+                        if (n_printed >= n_to_print)
+                            v = vocab_size;
+                    }
                 }
             }
             System.out.println("");
