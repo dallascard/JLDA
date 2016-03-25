@@ -68,6 +68,7 @@ public class ELDA {
 
         //ELDASampler sampler = new ELDASampler(entity_doc_file, tuple_vocab_file, tuple_entity_file, vocab_file, docs_file);
         ERLDASampler sampler = new ERLDASampler(entity_doc_file, tuple_vocab_file, tuple_entity_file, tuple_role_file, vocab_file, docs_file);
+        int n_roles = sampler.n_roles;
         int persona_word_matrix[][][] = sampler.run(n_personas, n_topics, alpha, beta, gamma, n_iter, burn_in, subsampling);
         String vocab[] = sampler.get_vocab();
         int vocab_size = (int) vocab.length;
@@ -79,8 +80,11 @@ public class ELDA {
             Path output_file = Paths.get(params.get("-o"), p + ".json");
             JSONObject obj = new JSONObject();
 
-            for (int v=0; v < vocab_size; v++)
-                obj.put(new String(vocab[v].getBytes("UTF-8"), "UTF-8"), persona_word_matrix[p][v]);
+            for (int v=0; v < vocab_size; v++) {
+                for (int r = 0; r < n_roles; r++) {
+                    obj.put(r + ":" + new String(vocab[v].getBytes("UTF-8"), "UTF-8"), persona_word_matrix[p][r][v]);
+                }
+            }
 
             try (FileWriter file = new FileWriter(output_file.toString())) {
                 file.write(obj.toJSONString());
@@ -93,7 +97,7 @@ public class ELDA {
                 file.write("**" + p + "**\n");
                 List<Integer> list = new ArrayList<>();
                 for (int v = 0; v < vocab_size; v++) {
-                    for (int r = 0; r < 3; r++) {
+                    for (int r = 0; r < n_roles; r++) {
                         list.add(persona_word_matrix[p][r][v]);
                     }
                 }
@@ -104,18 +108,19 @@ public class ELDA {
                 int threshold = list.get(n_to_print);
                 int n_printed = 0;
                 for (int v = 0; v < vocab_size; v++) {
-                    for (int r = 0; r < 3; r++) {
+                    for (int r = 0; r < n_roles; r++) {
                         if (persona_word_matrix[p][r][v] >= threshold) {
-                            file.write(r + ':' + vocab[v] + ": " + persona_word_matrix[p][r][v] + "\n");
+                            file.write(r + ":" + vocab[v] + ": " + persona_word_matrix[p][r][v] + "\n");
                             n_printed += 1;
-                            if (n_printed >= n_to_print)
+                            if (n_printed >= n_to_print) {
                                 v = vocab_size;
+                                r = n_roles;
+                            }
                         }
                     }
                 }
                 file.write("\n");
             }
         }
-
     }
 }

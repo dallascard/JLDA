@@ -117,6 +117,11 @@ public class ERLDASampler {
             docs[i] = (String) docs_json.get(i);
         }
 
+        System.out.println("number of documents=" + n_docs);
+        System.out.println("number of tuples=" + n_tuples);
+        System.out.println("number of roles=" + n_roles);
+        System.out.println("vocab size=" + vocab_size);
+
     }
 
     public String[] get_vocab() {
@@ -381,10 +386,12 @@ public class ERLDASampler {
             for (int v = 0; v < vocab_size; v++) {
                 for (int r = 0; r < n_roles; r++) {
                     if (t_persona_role_vocab_counts[p][r][v] >= threshold) {
-                        System.out.println(r + ':' + vocab[v] + ": " + t_persona_role_vocab_counts[p][r][v]);
+                        System.out.println(r + ":" + vocab[v] + ": " + t_persona_role_vocab_counts[p][r][v]);
                         n_printed += 1;
-                        if (n_printed >= n_to_print)
+                        if (n_printed >= n_to_print) {
+                            r = n_roles;
                             v = vocab_size;
+                        }
                     }
                 }
             }
