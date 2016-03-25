@@ -123,7 +123,7 @@ public class ERLDASampler {
         return vocab;
     }
 
-    public int[][] run(int n_personas, int n_topics, double alpha, double beta, double gamma, int n_iter, int burn_in, int subsampling) {
+    public int[][][] run(int n_personas, int n_topics, double alpha, double beta, double gamma, int n_iter, int burn_in, int subsampling) {
         this.n_personas = n_personas;
         this.n_topics = n_topics;
         this.alpha = alpha;
@@ -409,7 +409,7 @@ public class ERLDASampler {
         }
         */
 
-        return t_persona_vocab_counts;
+        return t_persona_role_vocab_counts;
     }
 
 }

@@ -68,7 +68,7 @@ public class ELDA {
 
         //ELDASampler sampler = new ELDASampler(entity_doc_file, tuple_vocab_file, tuple_entity_file, vocab_file, docs_file);
         ERLDASampler sampler = new ERLDASampler(entity_doc_file, tuple_vocab_file, tuple_entity_file, tuple_role_file, vocab_file, docs_file);
-        int persona_word_matrix[][] = sampler.run(n_personas, n_topics, alpha, beta, gamma, n_iter, burn_in, subsampling);
+        int persona_word_matrix[][][] = sampler.run(n_personas, n_topics, alpha, beta, gamma, n_iter, burn_in, subsampling);
         String vocab[] = sampler.get_vocab();
         int vocab_size = (int) vocab.length;
         System.out.println(vocab_size);
@@ -92,8 +92,11 @@ public class ELDA {
             for (int p=0; p < n_personas; p++) {
                 file.write("**" + p + "**\n");
                 List<Integer> list = new ArrayList<>();
-                for (int v = 0; v < vocab_size; v++)
-                    list.add(persona_word_matrix[p][v]);
+                for (int v = 0; v < vocab_size; v++) {
+                    for (int r = 0; r < 3; r++) {
+                        list.add(persona_word_matrix[p][r][v]);
+                    }
+                }
 
                 Collections.sort(list);
                 Collections.reverse(list);
@@ -101,11 +104,13 @@ public class ELDA {
                 int threshold = list.get(n_to_print);
                 int n_printed = 0;
                 for (int v = 0; v < vocab_size; v++) {
-                    if (persona_word_matrix[p][v] >= threshold) {
-                        file.write(vocab[v] + ": " + persona_word_matrix[p][v] + "\n");
-                        n_printed += 1;
-                        if (n_printed >= n_to_print)
-                            v = vocab_size;
+                    for (int r = 0; r < 3; r++) {
+                        if (persona_word_matrix[p][r][v] >= threshold) {
+                            file.write(r + ':' + vocab[v] + ": " + persona_word_matrix[p][r][v] + "\n");
+                            n_printed += 1;
+                            if (n_printed >= n_to_print)
+                                v = vocab_size;
+                        }
                     }
                 }
                 file.write("\n");
