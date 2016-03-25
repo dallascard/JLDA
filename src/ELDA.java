@@ -1,7 +1,8 @@
 import java.nio.file.Path;
 import java.nio.file.Paths;
-
 import java.util.HashMap;
+import java.io.FileWriter;
+import org.json.simple.JSONObject;
 
 public class ELDA {
 
@@ -11,6 +12,7 @@ public class ELDA {
 
         // set defaults
         params.put("-d", "");  // input dir
+        params.put("-o", "");  // output dir
         params.put("-p", "25");                     // n_personas
         params.put("-k", "25");                     // n_topics
         params.put("-a", "1");                      // alpha
@@ -36,6 +38,11 @@ public class ELDA {
             System.exit(0);
         }
 
+        if (params.get("-o").equals("")) {
+            System.out.println(params);
+            System.exit(0);
+        }
+
         System.out.println(params);
 
         Path tuple_vocab_file = Paths.get(params.get("-d"), "tuple_vocab.json");
@@ -57,28 +64,25 @@ public class ELDA {
 
         //ELDASampler sampler = new ELDASampler(entity_doc_file, tuple_vocab_file, tuple_entity_file, vocab_file, docs_file);
         ERLDASampler sampler = new ERLDASampler(entity_doc_file, tuple_vocab_file, tuple_entity_file, tuple_role_file, vocab_file, docs_file);
-        int topic_word_matrix[][] = sampler.run(n_personas, n_topics, alpha, beta, gamma, n_iter, burn_in, subsampling);
+        int persona_word_matrix[][] = sampler.run(n_personas, n_topics, alpha, beta, gamma, n_iter, burn_in, subsampling);
         String vocab[] = sampler.get_vocab();
         int vocab_size = (int) vocab.length;
         System.out.println(vocab_size);
 
-        /*
+
         System.out.println("Writing results to file");
-        //String output_dir = "/Users/dcard/Projects/CMU/ARK/guac/datasets/mfc_v2/lda/";
-        for (int k=0; k < n_topics; k++) {
-            Path output_file = Paths.get(params.get("-d"), k + ".json");
+        for (int p=0; p < n_personas; p++) {
+            Path output_file = Paths.get(params.get("-o"), p + ".json");
             JSONObject obj = new JSONObject();
 
             for (int v=0; v < vocab_size; v++)
-                obj.put(new String(vocab[v].getBytes("UTF-8"), "UTF-8"), word_topic_matrix[v][k]);
+                obj.put(new String(vocab[v].getBytes("UTF-8"), "UTF-8"), persona_word_matrix[p][v]);
 
             try (FileWriter file = new FileWriter(output_file.toString())) {
                 file.write(obj.toJSONString());
             }
 
         }
-        */
-
     }
 
 }

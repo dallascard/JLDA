@@ -404,7 +404,7 @@ public class ERLDASampler {
         }
         */
 
-        return t_topic_vocab_counts;
+        return t_persona_vocab_counts;
     }
 
 }
