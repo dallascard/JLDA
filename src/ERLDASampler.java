@@ -1,9 +1,17 @@
 import org.json.simple.JSONArray;
 import org.json.simple.parser.JSONParser;
 import java.io.FileReader;
+import java.io.FileWriter;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 import java.nio.file.Path;
+
+import cern.colt.matrix.tdouble.DoubleMatrix1D;
+import cern.colt.matrix.tdouble.DoubleMatrix2D;
+import cern.colt.matrix.tdouble.impl.DenseDoubleMatrix1D;
+import cern.colt.matrix.tdouble.impl.DenseDoubleMatrix2D;
+
 
 
 public class ERLDASampler {
@@ -128,7 +136,7 @@ public class ERLDASampler {
         return vocab;
     }
 
-    public int[][][] run(int n_personas, int n_topics, double alpha, double beta, double gamma, int n_iter, int burn_in, int subsampling) {
+    public int[][][] run(int n_personas, int n_topics, double alpha, double beta, double gamma, int n_iter, int burn_in, int subsampling, String outputDir) throws Exception {
         this.n_personas = n_personas;
         this.n_topics = n_topics;
         this.alpha = alpha;
@@ -415,6 +423,30 @@ public class ERLDASampler {
             System.out.println("");
         }
         */
+
+        Path output_file = Paths.get(outputDir, "topic_vocab_counts.csv");
+        try (FileWriter file = new FileWriter(output_file.toString())) {
+            for (int v=0; v < vocab_size; v++) {
+                file.write(vocab[v] + ",");
+                for (int k=0; k < n_topics; k++) {
+                    file.write(t_topic_vocab_counts[k][v] + ",");
+                }
+                file.write("\n");
+            }
+        }
+
+        output_file = Paths.get(outputDir, "persona_role_topic_counts.csv");
+        try (FileWriter file = new FileWriter(output_file.toString())) {
+            for (int k=0; k < n_topics; k++) {
+                file.write(k + ",");
+                for (int p=0; p < n_personas; p++) {
+                    for (int r=0; r < n_roles; r++) {
+                        file.write(t_persona_role_topic_counts[p][r][k] + ",");
+                    }
+                }
+                file.write("\n");
+            }
+        }
 
         return t_persona_role_vocab_counts;
     }

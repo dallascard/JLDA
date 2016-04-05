@@ -69,12 +69,12 @@ public class ELDA {
         //ELDASampler sampler = new ELDASampler(entity_doc_file, tuple_vocab_file, tuple_entity_file, vocab_file, docs_file);
         ERLDASampler sampler = new ERLDASampler(entity_doc_file, tuple_vocab_file, tuple_entity_file, tuple_role_file, vocab_file, docs_file);
         int n_roles = sampler.n_roles;
-        int persona_word_matrix[][][] = sampler.run(n_personas, n_topics, alpha, beta, gamma, n_iter, burn_in, subsampling);
+        int persona_word_matrix[][][] = sampler.run(n_personas, n_topics, alpha, beta, gamma, n_iter, burn_in, subsampling, params.get("-o"));
         String vocab[] = sampler.get_vocab();
         int vocab_size = (int) vocab.length;
         System.out.println(vocab_size);
 
-
+        /*
         System.out.println("Writing results to file");
         for (int p=0; p < n_personas; p++) {
             Path output_file = Paths.get(params.get("-o"), p + ".json");
@@ -122,5 +122,6 @@ public class ELDA {
                 file.write("\n");
             }
         }
+        */
     }
 }
