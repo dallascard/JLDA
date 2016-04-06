@@ -14,7 +14,7 @@ import cern.colt.matrix.tdouble.impl.DenseDoubleMatrix2D;
 
 
 
-public class ERLDASampler {
+class ERLDASampler {
     int n_personas;
     int n_topics;
     double alpha;
@@ -51,7 +51,7 @@ public class ERLDASampler {
     int t_persona_role_counts[][];
     int t_topic_tuple_counts[];
     int t_persona_role_vocab_counts[][][];
-
+    int t_entity_persona_counts[][];
 
     public ERLDASampler(Path entity_doc_file, Path tuple_vocab_file, Path tuple_entity_file, Path tuple_role_file, Path vocab_file, Path doc_file) throws Exception {
         JSONParser parser = new JSONParser();
@@ -171,6 +171,7 @@ public class ERLDASampler {
         t_persona_role_counts = new int[n_personas][n_roles];
         t_topic_tuple_counts = new int[n_topics];
         t_persona_role_vocab_counts = new int[n_personas][n_roles][vocab_size];
+        t_entity_persona_counts = new int[n_entities][n_personas];
 
         // do random initalization
         for (int e=0; e < n_entities; e++) {
@@ -367,6 +368,9 @@ public class ERLDASampler {
                         for (int v = 0; v < vocab_size; v++)
                             t_topic_vocab_counts[k][v] += topic_vocab_counts[k][v];
                     }
+                    for (int e = 0; e < n_entities; e++) {
+                        t_entity_persona_counts[e][entity_personas[e]] += 1;
+                    }
                 }
             }
             else if (i % subsampling == 0) {
@@ -443,6 +447,17 @@ public class ERLDASampler {
                     for (int r=0; r < n_roles; r++) {
                         file.write(t_persona_role_topic_counts[p][r][k] + ",");
                     }
+                }
+                file.write("\n");
+            }
+        }
+
+        output_file = Paths.get(outputDir, "entity_persona_counts.csv");
+        try (FileWriter file = new FileWriter(output_file.toString())) {
+            for (int e=0; e < n_entities; e++) {
+                file.write(e + ",");
+                for (int p=0; p < n_personas; p++) {
+                    file.write(t_entity_persona_counts[e][p] + ",");
                 }
                 file.write("\n");
             }
