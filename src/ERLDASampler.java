@@ -463,6 +463,19 @@ class ERLDASampler {
             }
         }
 
+        output_file = Paths.get(outputDir, "persona_role_vocab_counts.csv");
+        try (FileWriter file = new FileWriter(output_file.toString())) {
+            for (int r=0; r < n_roles; r++) {
+                for (int v=0; v < vocab_size; v++) {
+                    file.write(r + ":" + vocab[v] + ',');
+                    for (int p=0; p < n_personas; p++) {
+                        file.write(t_persona_role_vocab_counts[p][r][v] + ",");
+                    }
+                    file.write("\n");
+                }
+            }
+        }
+
         return t_persona_role_vocab_counts;
     }
 
