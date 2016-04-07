@@ -49,12 +49,8 @@ public class ELDA {
 
         System.out.println(params);
 
-        Path tuple_vocab_file = Paths.get(params.get("-d"), "tuple_vocab.json");
-        Path tuple_entity_file = Paths.get(params.get("-d"), "tuple_entity.json");
-        Path tuple_role_file = Paths.get(params.get("-d"), "tuple_role.json");
-        Path entity_doc_file = Paths.get(params.get("-d"), "entity_doc.json");
-        Path vocab_file = Paths.get(params.get("-d"), "vocab.json");
-        Path docs_file = Paths.get(params.get("-d"), "docs.json");
+        String input_dir = params.get("-d");
+        String output_dir = params.get("-o");
 
         double alpha = Double.parseDouble(params.get("-a"));
         double beta = Double.parseDouble(params.get("-b"));
@@ -67,61 +63,8 @@ public class ELDA {
         int subsampling = Integer.parseInt(params.get("-s"));
 
         //ELDASampler sampler = new ELDASampler(entity_doc_file, tuple_vocab_file, tuple_entity_file, vocab_file, docs_file);
-        ERLDASampler sampler = new ERLDASampler(entity_doc_file, tuple_vocab_file, tuple_entity_file, tuple_role_file, vocab_file, docs_file);
-        int n_roles = sampler.n_roles;
-        int persona_word_matrix[][][] = sampler.run(n_personas, n_topics, alpha, beta, gamma, n_iter, burn_in, subsampling, params.get("-o"));
-        String vocab[] = sampler.get_vocab();
-        int vocab_size = (int) vocab.length;
-        System.out.println(vocab_size);
+        ERLDASampler sampler = new ERLDASampler(input_dir);
+        sampler.run(n_personas, n_topics, alpha, beta, gamma, n_iter, burn_in, subsampling, output_dir);
 
-        /*
-        System.out.println("Writing results to file");
-        for (int p=0; p < n_personas; p++) {
-            Path output_file = Paths.get(params.get("-o"), p + ".json");
-            JSONObject obj = new JSONObject();
-
-            for (int v=0; v < vocab_size; v++) {
-                for (int r = 0; r < n_roles; r++) {
-                    obj.put(r + ":" + new String(vocab[v].getBytes("UTF-8"), "UTF-8"), persona_word_matrix[p][r][v]);
-                }
-            }
-
-            try (FileWriter file = new FileWriter(output_file.toString())) {
-                file.write(obj.toJSONString());
-            }
-        }
-
-        Path output_file = Paths.get(params.get("-o"), "summary.txt");
-        try (FileWriter file = new FileWriter(output_file.toString())) {
-            for (int p=0; p < n_personas; p++) {
-                file.write("**" + p + "**\n");
-                List<Integer> list = new ArrayList<>();
-                for (int v = 0; v < vocab_size; v++) {
-                    for (int r = 0; r < n_roles; r++) {
-                        list.add(persona_word_matrix[p][r][v]);
-                    }
-                }
-
-                Collections.sort(list);
-                Collections.reverse(list);
-                int n_to_print = 10;
-                int threshold = list.get(n_to_print);
-                int n_printed = 0;
-                for (int v = 0; v < vocab_size; v++) {
-                    for (int r = 0; r < n_roles; r++) {
-                        if (persona_word_matrix[p][r][v] >= threshold) {
-                            file.write(r + ":" + vocab[v] + ": " + persona_word_matrix[p][r][v] + "\n");
-                            n_printed += 1;
-                            if (n_printed >= n_to_print) {
-                                v = vocab_size;
-                                r = n_roles;
-                            }
-                        }
-                    }
-                }
-                file.write("\n");
-            }
-        }
-        */
     }
 }

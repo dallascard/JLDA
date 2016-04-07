@@ -15,57 +15,70 @@ import cern.colt.matrix.tdouble.impl.DenseDoubleMatrix2D;
 
 
 class ERLDASampler {
-    int n_personas;
-    int n_topics;
-    double alpha;
-    double beta;
-    double gamma;
+    private int vocab_size;
+    private int n_tuples;
+    private int n_docs;
+    private int n_entities;
+    private int n_roles;
 
-    int vocab_size;
-    int n_tuples;
-    int n_docs;
-    int n_entities;
-    int n_roles;
+    private int head_word_vocab_size;
+    private int n_head_words;
 
-    int entity_doc[];
-    int tuple_vocab[];
-    int tuple_entity[];
-    int tuple_role[];
-    HashMap<Integer, List<Integer>> entity_tuples;
-    String vocab[];
-    String docs[];
+    private int entity_doc[];
+    private int tuple_vocab[];
+    private int tuple_entity[];
+    private int tuple_role[];
+    private HashMap<Integer, List<Integer>> entity_tuples;
+    private String vocab[];
+    private String docs[];
 
-    int entity_personas[];
-    int tuple_topics[];
+    private int head_vocab_list[];
+    private int head_entity_list[];
+    private String head_word_vocab[];
+    private HashMap<Integer, List<Integer>> entity_head_words;
 
-    int document_persona_counts[][];
-    int persona_role_topic_counts[][][];
-    int topic_vocab_counts[][];
-    int persona_role_counts[][];
-    int topic_tuple_counts[];
-    int persona_role_vocab_counts[][][];
+    private int entity_personas[];
+    private int tuple_topics[];
 
-    int t_document_persona_counts[][];
-    int t_persona_role_topic_counts[][][];
-    int t_topic_vocab_counts[][];
-    int t_persona_role_counts[][];
-    int t_topic_tuple_counts[];
-    int t_persona_role_vocab_counts[][][];
-    int t_entity_persona_counts[][];
+    private int t_document_persona_counts[][];
+    private int t_persona_role_topic_counts[][][];
+    private int t_topic_vocab_counts[][];
+    private int t_persona_role_counts[][];
+    private int t_topic_tuple_counts[];
+    private int t_persona_role_vocab_counts[][][];
+    private int t_entity_persona_counts[][];
+    private int t_persona_head_word_counts[][];
 
-    public ERLDASampler(Path entity_doc_file, Path tuple_vocab_file, Path tuple_entity_file, Path tuple_role_file, Path vocab_file, Path doc_file) throws Exception {
+    public ERLDASampler(String input_dir) throws Exception {
+
+        Path tuple_vocab_file = Paths.get(input_dir, "tuple_vocab.json");
+        Path tuple_entity_file = Paths.get(input_dir, "tuple_entity.json");
+        Path tuple_role_file = Paths.get(input_dir, "tuple_role.json");
+        Path entity_doc_file = Paths.get(input_dir, "entity_doc.json");
+        Path vocab_file = Paths.get(input_dir, "vocab.json");
+        Path docs_file = Paths.get(input_dir, "docs.json");
+
+        Path head_vocab_file = Paths.get(input_dir, "head_vocab_list.json");
+        Path head_entity_file = Paths.get(input_dir, "head_entity_list.json");
+        Path head_word_vocab_file = Paths.get(input_dir, "head_word_vocab.json");
+
         JSONParser parser = new JSONParser();
         JSONArray entity_doc_json = (JSONArray) parser.parse(new FileReader(entity_doc_file.toString()));
         JSONArray tuple_vocab_json = (JSONArray) parser.parse(new FileReader(tuple_vocab_file.toString()));
         JSONArray tuple_entity_json = (JSONArray) parser.parse(new FileReader(tuple_entity_file.toString()));
         JSONArray tuple_role_json = (JSONArray) parser.parse(new FileReader(tuple_role_file.toString()));
         JSONArray vocab_json = (JSONArray) parser.parse(new FileReader(vocab_file.toString()));
-        JSONArray docs_json = (JSONArray) parser.parse(new FileReader(doc_file.toString()));
+        JSONArray docs_json = (JSONArray) parser.parse(new FileReader(docs_file.toString()));
+        JSONArray head_vocab_json = (JSONArray) parser.parse(new FileReader(head_vocab_file.toString()));
+        JSONArray head_entity_json = (JSONArray) parser.parse(new FileReader(head_entity_file.toString()));
+        JSONArray head_word_vocab_json = (JSONArray) parser.parse(new FileReader(head_word_vocab_file.toString()));
 
         n_tuples = tuple_vocab_json.size();
         System.out.println("n_tuples=" + n_tuples);
         n_entities = entity_doc_json.size();
         System.out.println("n_entities=" + n_entities);
+        n_head_words = head_vocab_json.size();
+        System.out.println("n_head_words" + n_head_words);
 
         // transfer entity to document mapping from json to array, and count the number of documents
         n_docs = 0;
@@ -125,6 +138,32 @@ class ERLDASampler {
             docs[i] = (String) docs_json.get(i);
         }
 
+        head_vocab_list = new int[n_head_words];
+        head_entity_list = new int[n_head_words];
+        entity_head_words = new HashMap<>();
+
+        head_word_vocab_size = 0;
+        for (int i = 0; i < n_head_words; i++) {
+            head_vocab_list[i] = ((Long) head_vocab_json.get(i)).intValue();
+            head_entity_list[i] = ((Long) head_entity_json.get(i)).intValue();
+            if (entity_head_words.get(head_entity_list[i]) == null) {
+                List<Integer> head_words = new ArrayList<>();
+                head_words.add(i);
+                entity_head_words.put(head_entity_list[i], head_words);
+            }
+            else {
+                List<Integer> head_words = entity_head_words.get(head_entity_list[i]);
+                head_words.add(i);
+                entity_head_words.put(head_entity_list[i], head_words);
+            }
+        }
+        head_word_vocab_size = head_word_vocab_json.size();
+
+        head_word_vocab = new String[head_word_vocab_size];
+        for (int i = 0; i < head_word_vocab_size; i++) {
+            head_word_vocab[i] = (String) head_word_vocab_json.get(i);
+        }
+
         System.out.println("number of documents=" + n_docs);
         System.out.println("number of tuples=" + n_tuples);
         System.out.println("number of roles=" + n_roles);
@@ -137,33 +176,19 @@ class ERLDASampler {
     }
 
     public int[][][] run(int n_personas, int n_topics, double alpha, double beta, double gamma, int n_iter, int burn_in, int subsampling, String outputDir) throws Exception {
-        this.n_personas = n_personas;
-        this.n_topics = n_topics;
-        this.alpha = alpha;
-        this.beta = beta;
-        this.gamma = gamma;
-
-        /*
-        int entity_personas[];
-        int tuple_topics[];
-
-        int persona_counts[];
-        int topic_counts[];
-        int document_persona_counts[][];
-        int persona_topic_counts[][];
-        int word_topic_counts[][];
-        */
 
         // initialize arrays
         System.out.println("Initializing arrays");
         entity_personas = new int[n_entities];
         tuple_topics = new int[n_tuples];
-        document_persona_counts = new int[n_docs][n_personas];
-        persona_role_topic_counts = new int[n_personas][n_roles][n_topics];
-        topic_vocab_counts = new int[n_topics][vocab_size];
-        persona_role_counts = new int[n_personas][n_roles];
-        topic_tuple_counts = new int[n_topics];
-        persona_role_vocab_counts = new int[n_personas][n_roles][vocab_size];
+        int [][] document_persona_counts = new int[n_docs][n_personas];
+        int [][][] persona_role_topic_counts = new int[n_personas][n_roles][n_topics];
+        int [][] topic_vocab_counts = new int[n_topics][vocab_size];
+        int [][] persona_role_counts = new int[n_personas][n_roles];
+        int [] topic_tuple_counts = new int[n_topics];
+        int [][][] persona_role_vocab_counts = new int[n_personas][n_roles][vocab_size];
+
+        int [][] persona_head_word_counts = new int[n_personas][head_word_vocab_size];
 
         t_document_persona_counts = new int[n_docs][n_personas];
         t_persona_role_topic_counts = new int[n_personas][n_roles][n_topics];
@@ -172,6 +197,7 @@ class ERLDASampler {
         t_topic_tuple_counts = new int[n_topics];
         t_persona_role_vocab_counts = new int[n_personas][n_roles][vocab_size];
         t_entity_persona_counts = new int[n_entities][n_personas];
+        t_persona_head_word_counts= new int[n_personas][head_word_vocab_size];
 
         // do random initalization
         for (int e=0; e < n_entities; e++) {
@@ -205,13 +231,18 @@ class ERLDASampler {
         for (int i = 0; i < n_entities; i++) {
             entity_order.add(i);
         }
-        //Collections.shuffle(entity_order);
 
         List<Integer> tuple_order = new ArrayList<>();
         for (int i = 0; i < n_tuples; i++) {
             tuple_order.add(i);
         }
-        //Collections.shuffle(tuple_order);
+
+        for (int j=0; j < n_head_words; j++) {
+            int e_j = head_entity_list[j];
+            int v_j = head_vocab_list[j];
+            int p_j = entity_personas[e_j];
+            persona_head_word_counts[p_j][v_j] += 1;
+        }
 
         /*
         for (int k=0; k < n_topics; k++) {
@@ -302,7 +333,12 @@ class ERLDASampler {
                     persona_role_vocab_counts[p_e][role_t][v_t] -= 1;
                     persona_role_vocab_counts[p][role_t][v_t] += 1;
                 }
-
+                List<Integer> head_words = entity_head_words.get(e);
+                for (int t : head_words) {
+                    int v_t = head_vocab_list[t];
+                    persona_head_word_counts[p_e][v_t] -= 1;
+                    persona_head_word_counts[p][v_t] += 1;
+                }
             }
 
             // then sample topics
@@ -361,6 +397,9 @@ class ERLDASampler {
                         }
                         for (int d = 0; d < n_docs; d++) {
                             t_document_persona_counts[d][p] += document_persona_counts[d][p];
+                        }
+                        for (int v = 0; v < head_word_vocab_size; v++) {
+                            t_persona_head_word_counts[p][v] += persona_head_word_counts[p][v];
                         }
                     }
                     for (int k = 0; k < n_topics; k++) {
@@ -473,6 +512,17 @@ class ERLDASampler {
                     }
                     file.write("\n");
                 }
+            }
+        }
+
+        output_file = Paths.get(outputDir, "persona_head_word_counts.csv");
+        try (FileWriter file = new FileWriter(output_file.toString())) {
+            for (int v=0; v < head_word_vocab_size; v++) {
+                file.write(head_word_vocab[v] + ',');
+                for (int p=0; p < n_personas; p++) {
+                    file.write(persona_head_word_counts[p][v] + ",");
+                }
+                file.write("\n");
             }
         }
 
