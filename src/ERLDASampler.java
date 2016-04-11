@@ -290,10 +290,18 @@ class ERLDASampler {
 
                     persona_role_topic_counts[p_e][role_t][topic_t] -= 1;
                     persona_role_counts[p_e][role_t] -= 1;
+                }
+                for (int t : tuples) {
+                    int topic_t = tuple_topics[t];
+                    int role_t = tuple_role[t];
 
-                    for (int p=0; p < n_personas; p++) {
+                    for (int p = 0; p < n_personas; p++) {
                         pr[p] += Math.log(persona_role_topic_counts[p][role_t][topic_t] + beta) - Math.log(persona_role_counts[p][role_t] + beta * n_topics);
                     }
+                }
+                for (int t : tuples) {
+                    int topic_t = tuple_topics[t];
+                    int role_t = tuple_role[t];
                     // add the subtracted counts back in so that they don't affect the next tuple
                     persona_role_topic_counts[p_e][role_t][topic_t] += 1;
                     persona_role_counts[p_e][role_t] += 1;
