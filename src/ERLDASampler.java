@@ -253,27 +253,6 @@ class ERLDASampler {
             persona_head_word_counts[p_j][v_j] += 1;
         }
 
-        /*
-        for (int k=0; k < n_topics; k++) {
-            System.out.println("**" + k + "**");
-            List<Integer> list = new ArrayList<>();
-            for (int v = 0; v < vocab_size; v++)
-                list.add(topic_vocab_counts[k][v]);
-
-            Collections.sort(list);
-            Collections.reverse(list);
-            int n_to_print = 5;
-            int threshold = list.get(n_to_print);
-            if (threshold < 6)
-                threshold = 6;
-            for (int v = 0; v < vocab_size; v++) {
-                if (topic_vocab_counts[k][v] >= threshold)
-                    System.out.println(vocab[v] + ": " + topic_vocab_counts[k][v]);
-            }
-            System.out.println("");
-        }
-        */
-
         // start sampling
         System.out.println("Doing burn-in");
         for (int i=0; i < n_iter; i++) {
@@ -281,33 +260,7 @@ class ERLDASampler {
             // slice sample hyperparameters
             if ((i > 0) & (i % 20 == 0)) {
                 if ((i < 500) | (i % 100 == 0)) {
-                    System.out.println("Tuning alpha");
-                    int alpha_count = 0;
-                    double log_p_current_alpha = calc_log_p_alpha(alpha);
-                    double log_alpha = Math.log(alpha);
-                    double u = Math.log(ThreadLocalRandom.current().nextDouble()) + log_p_current_alpha;
-                    System.out.println("current log p = " + log_p_current_alpha);
-                    System.out.println("Target log p = " + u);
-                    double offset = ThreadLocalRandom.current().nextDouble();
-                    double left = log_alpha - offset * slice_width;
-                    double right = left + slice_width;
-                    double new_log_alpha = left + ThreadLocalRandom.current().nextDouble() * (right - left);
-                    double log_p_new_alpha = calc_log_p_alpha(Math.exp(new_log_alpha));
-                    System.out.println("I Left:" + Math.exp(left) + " Right:" + Math.exp(right) + "; new alpha = " + Math.exp(new_log_alpha) + "; log p = " + log_p_new_alpha);
-                    while (log_p_new_alpha < u) {
-                        if (new_log_alpha < log_alpha) {
-                            left = new_log_alpha;
-                            System.out.print("R ");
-                        } else {
-                            right = new_log_alpha;
-                            System.out.print("L ");
-                        }
-                        new_log_alpha = left + ThreadLocalRandom.current().nextDouble() * (right - left);
-                        log_p_new_alpha = calc_log_p_alpha(Math.exp(new_log_alpha));
-                        System.out.println("Left:" + Math.exp(left) + " Right:" + Math.exp(right) + "; new alpha = " + Math.exp(new_log_alpha) + "; log p = " + log_p_new_alpha);
-                    }
-                    alpha = Math.exp(new_log_alpha);
-                    System.out.println("new alpha = " + alpha);
+                    alpha = slice_sample_alpha(alpha, slice_width);
                 }
             }
 
@@ -577,20 +530,95 @@ class ERLDASampler {
         return t_persona_role_vocab_counts;
     }
 
+
+    // compute gamma(start)/gamma(start-steps) without actually computing the gamma functions;
+    // note: gamma(t+1) = t * gamma(t); gamma(2)=gamma(1)=1
+    private double partial_gamma(double start, int steps) {
+        if (start == steps) {
+            return Gamma.gamma(start);
+        }
+        else if (steps > start) {
+            return -1;
+        }
+        else if (steps == 0) {
+            return 1;
+        }
+        else {
+            return partial_gamma(start-1, steps-1) * (start-1);
+        }
+    }
+
+    // TO DO: avoid calculating Gamma functions in full to avoid NaNs
     private double calc_log_p_alpha(double alpha) {
         double log_p = Math.log(alpha)  ;
         for (int d=0; d < n_docs; d++) {
-            double g1 = Math.log(Gamma.gamma(n_personas * alpha));
-            double g2 = Math.log(Math.pow(Gamma.gamma(alpha), n_personas));
-            double g3 = 0.0;
             for (int k=0; k < n_personas; k++) {
-                g3 += Math.log(Gamma.gamma(alpha + document_persona_counts[d][k]));
+                log_p += Math.log(partial_gamma(alpha + document_persona_counts[d][k], document_persona_counts[d][k]));
             }
-            double g4 = Math.log(Gamma.gamma(n_personas * alpha + document_persona_totals[d]));
-            //System.out.println(alpha + " " + g1 + " " + g2 + " " + g3 + " " + g4 + " " + n_personas * alpha + document_persona_totals[d]);
-            log_p += g1 + g3 - g2 - g4;
+            log_p -= Math.log(partial_gamma(n_personas * alpha + document_persona_totals[d], document_persona_totals[d]));
         }
         return log_p;
     }
+
+
+    private double slice_sample_alpha(double alpha, double slice_width) {
+        System.out.println("Tuning alpha");
+        int alpha_count = 0;
+        double log_p_current_alpha = calc_log_p_alpha(alpha);
+        double log_alpha = Math.log(alpha);
+        double u = Math.log(ThreadLocalRandom.current().nextDouble()) + log_p_current_alpha;
+        System.out.println("current log p = " + log_p_current_alpha);
+        System.out.println("Target log p = " + u);
+        double offset = ThreadLocalRandom.current().nextDouble();
+        double left = log_alpha - offset * slice_width;
+        double right = left + slice_width;
+        double new_log_alpha = left + ThreadLocalRandom.current().nextDouble() * (right - left);
+        double log_p_new_alpha = calc_log_p_alpha(Math.exp(new_log_alpha));
+        System.out.println("Left:" + Math.exp(left) + " Right:" + Math.exp(right) + "; new alpha = " + Math.exp(new_log_alpha) + "; log p = " + log_p_new_alpha);
+        while (log_p_new_alpha < u) {
+            if (new_log_alpha < log_alpha) {
+                left = new_log_alpha;
+            } else {
+                right = new_log_alpha;
+            }
+            new_log_alpha = left + ThreadLocalRandom.current().nextDouble() * (right - left);
+            log_p_new_alpha = calc_log_p_alpha(Math.exp(new_log_alpha));
+            System.out.println("Left:" + Math.exp(left) + " Right:" + Math.exp(right) + "; new alpha = " + Math.exp(new_log_alpha) + "; log p = " + log_p_new_alpha);
+        }
+        alpha = Math.exp(new_log_alpha);
+        System.out.println("new alpha = " + alpha);
+        return alpha;
+    }
+
+    /*
+    private double slice_sample_beta(double beta, double slice_width) {
+        System.out.println("Tuning alpha");
+        int alpha_count = 0;
+        double log_p_current_alpha = calc_log_p_alpha(beta);
+        double log_alpha = Math.log(alpha);
+        double u = Math.log(ThreadLocalRandom.current().nextDouble()) + log_p_current_alpha;
+        System.out.println("current log p = " + log_p_current_alpha);
+        System.out.println("Target log p = " + u);
+        double offset = ThreadLocalRandom.current().nextDouble();
+        double left = log_alpha - offset * slice_width;
+        double right = left + slice_width;
+        double new_log_alpha = left + ThreadLocalRandom.current().nextDouble() * (right - left);
+        double log_p_new_alpha = calc_log_p_alpha(Math.exp(new_log_alpha));
+        System.out.println("Left:" + Math.exp(left) + " Right:" + Math.exp(right) + "; new alpha = " + Math.exp(new_log_alpha) + "; log p = " + log_p_new_alpha);
+        while (log_p_new_alpha < u) {
+            if (new_log_alpha < log_alpha) {
+                left = new_log_alpha;
+            } else {
+                right = new_log_alpha;
+            }
+            new_log_alpha = left + ThreadLocalRandom.current().nextDouble() * (right - left);
+            log_p_new_alpha = calc_log_p_alpha(Math.exp(new_log_alpha));
+            System.out.println("Left:" + Math.exp(left) + " Right:" + Math.exp(right) + "; new alpha = " + Math.exp(new_log_alpha) + "; log p = " + log_p_new_alpha);
+        }
+        alpha = Math.exp(new_log_alpha);
+        System.out.println("new alpha = " + alpha);
+        return alpha;
+    }
+    */
 
 }
