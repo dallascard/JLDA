@@ -25,6 +25,7 @@ public class ELDA {
         params.put("-i", "3000");                    // n_iter
         params.put("-u", "1000");                     // burn_in
         params.put("-s", "25");                      // subsampling
+        params.put("-w", "10.0");                      // subsampling
 
 
         String arg = null;
@@ -61,10 +62,11 @@ public class ELDA {
         int n_iter = Integer.parseInt(params.get("-i"));
         int burn_in = Integer.parseInt(params.get("-u"));
         int subsampling = Integer.parseInt(params.get("-s"));
+        double slice_width = Double.parseDouble(params.get("-w"));
 
         //ELDASampler sampler = new ELDASampler(entity_doc_file, tuple_vocab_file, tuple_entity_file, vocab_file, docs_file);
         ERLDASampler sampler = new ERLDASampler(input_dir);
-        sampler.run(n_personas, n_topics, alpha, beta, gamma, n_iter, burn_in, subsampling, output_dir);
+        sampler.run(n_personas, n_topics, alpha, beta, gamma, n_iter, burn_in, subsampling, output_dir, slice_width);
 
     }
 }

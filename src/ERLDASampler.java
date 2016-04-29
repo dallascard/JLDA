@@ -1,3 +1,4 @@
+import cern.jet.stat.tdouble.Gamma;
 import org.json.simple.JSONArray;
 import org.json.simple.parser.JSONParser;
 import java.io.FileReader;
@@ -20,6 +21,7 @@ class ERLDASampler {
     private int n_docs;
     private int n_entities;
     private int n_roles;
+    private int n_personas;
 
     private int head_word_vocab_size;
     private int n_head_words;
@@ -39,6 +41,9 @@ class ERLDASampler {
 
     private int entity_personas[];
     private int tuple_topics[];
+
+    private int document_persona_counts[][];
+    private int document_persona_totals[];
 
     private int t_document_persona_counts[][];
     private int t_persona_role_topic_counts[][][];
@@ -175,13 +180,16 @@ class ERLDASampler {
         return vocab;
     }
 
-    public int[][][] run(int n_personas, int n_topics, double alpha, double beta, double gamma, int n_iter, int burn_in, int subsampling, String outputDir) throws Exception {
+    public int[][][] run(int n_personas, int n_topics, double alpha, double beta, double gamma, int n_iter, int burn_in, int subsampling, String outputDir, double slice_width) throws Exception {
+
+        this.n_personas = n_personas;
 
         // initialize arrays
         System.out.println("Initializing arrays");
         entity_personas = new int[n_entities];
         tuple_topics = new int[n_tuples];
-        int [][] document_persona_counts = new int[n_docs][n_personas];
+        document_persona_counts = new int[n_docs][n_personas];
+        document_persona_totals = new int[n_docs];
         int [][][] persona_role_topic_counts = new int[n_personas][n_roles][n_topics];
         int [][] topic_vocab_counts = new int[n_topics][vocab_size];
         int [][] persona_role_counts = new int[n_personas][n_roles];
@@ -205,6 +213,7 @@ class ERLDASampler {
             int p = ThreadLocalRandom.current().nextInt(0, n_personas);
             entity_personas[e] = p;
             document_persona_counts[d_e][p] += 1;
+            document_persona_totals[d_e] += 1;
         }
 
         System.out.println(n_entities + " entities");
@@ -265,11 +274,42 @@ class ERLDASampler {
         }
         */
 
-        Random rand = new Random();
-
         // start sampling
         System.out.println("Doing burn-in");
         for (int i=0; i < n_iter; i++) {
+
+            // slice sample hyperparameters
+            if ((i > 0) & (i % 20 == 0)) {
+                if ((i < 500) | (i % 100 == 0)) {
+                    System.out.println("Tuning alpha");
+                    int alpha_count = 0;
+                    double log_p_current_alpha = calc_log_p_alpha(alpha);
+                    double log_alpha = Math.log(alpha);
+                    double u = Math.log(ThreadLocalRandom.current().nextDouble()) + log_p_current_alpha;
+                    System.out.println("current log p = " + log_p_current_alpha);
+                    System.out.println("Target log p = " + u);
+                    double offset = ThreadLocalRandom.current().nextDouble();
+                    double left = log_alpha - offset * slice_width;
+                    double right = left + slice_width;
+                    double new_log_alpha = left + ThreadLocalRandom.current().nextDouble() * (right - left);
+                    double log_p_new_alpha = calc_log_p_alpha(Math.exp(new_log_alpha));
+                    System.out.println("I Left:" + Math.exp(left) + " Right:" + Math.exp(right) + "; new alpha = " + Math.exp(new_log_alpha) + "; log p = " + log_p_new_alpha);
+                    while (log_p_new_alpha < u) {
+                        if (new_log_alpha < log_alpha) {
+                            left = new_log_alpha;
+                            System.out.print("R ");
+                        } else {
+                            right = new_log_alpha;
+                            System.out.print("L ");
+                        }
+                        new_log_alpha = left + ThreadLocalRandom.current().nextDouble() * (right - left);
+                        log_p_new_alpha = calc_log_p_alpha(Math.exp(new_log_alpha));
+                        System.out.println("Left:" + Math.exp(left) + " Right:" + Math.exp(right) + "; new alpha = " + Math.exp(new_log_alpha) + "; log p = " + log_p_new_alpha);
+                    }
+                    alpha = Math.exp(new_log_alpha);
+                    System.out.println("new alpha = " + alpha);
+                }
+            }
 
             // first sample personas
             for (int q=0; q < n_entities; q++) {
@@ -374,7 +414,7 @@ class ERLDASampler {
                 }
 
                 // sample a topic
-                double f = rand.nextDouble() * p_sum;
+                double f = ThreadLocalRandom.current().nextDouble() * p_sum;
                 int k = 0;
                 double temp = pr[k];
                 while (f > temp) {
@@ -535,6 +575,21 @@ class ERLDASampler {
         }
 
         return t_persona_role_vocab_counts;
+    }
+
+    private double calc_log_p_alpha(double alpha) {
+        double log_p = 0.0;
+        for (int d=0; d < n_docs; d++) {
+            double g1 = Math.log(Gamma.gamma(n_personas * alpha));
+            double g2 = Math.log(Math.pow(Gamma.gamma(alpha), n_personas));
+            double g3 = 0.0;
+            for (int k=0; k < n_personas; k++) {
+                g3 += Math.log(Gamma.gamma(alpha + document_persona_counts[d][k]));
+            }
+            double g4 = Math.log(Gamma.gamma(n_personas * alpha + document_persona_totals[d]));
+            log_p += Math.log(alpha) + g1 + g3 - g2 - g4;
+        }
+        return log_p;
     }
 
 }
