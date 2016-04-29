@@ -578,7 +578,7 @@ class ERLDASampler {
     }
 
     private double calc_log_p_alpha(double alpha) {
-        double log_p = 0.0;
+        double log_p = Math.log(alpha)  ;
         for (int d=0; d < n_docs; d++) {
             double g1 = Math.log(Gamma.gamma(n_personas * alpha));
             double g2 = Math.log(Math.pow(Gamma.gamma(alpha), n_personas));
@@ -587,7 +587,8 @@ class ERLDASampler {
                 g3 += Math.log(Gamma.gamma(alpha + document_persona_counts[d][k]));
             }
             double g4 = Math.log(Gamma.gamma(n_personas * alpha + document_persona_totals[d]));
-            log_p += Math.log(alpha) + g1 + g3 - g2 - g4;
+            //System.out.println(alpha + " " + g1 + " " + g2 + " " + g3 + " " + g4 + " " + n_personas * alpha + document_persona_totals[d]);
+            log_p += g1 + g3 - g2 - g4;
         }
         return log_p;
     }
