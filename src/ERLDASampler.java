@@ -22,6 +22,7 @@ class ERLDASampler {
     private int n_entities;
     private int n_roles;
     private int n_personas;
+    private int n_topics;
 
     private int head_word_vocab_size;
     private int n_head_words;
@@ -44,6 +45,12 @@ class ERLDASampler {
 
     private int document_persona_counts[][];
     private int document_persona_totals[];
+    private int topic_vocab_counts[][];
+    private int persona_role_topic_counts[][][];
+    private int persona_role_counts[][];
+    private int topic_tuple_counts[];
+    private int persona_role_vocab_counts[][][];
+
 
     private int t_document_persona_counts[][];
     private int t_persona_role_topic_counts[][][];
@@ -183,6 +190,7 @@ class ERLDASampler {
     public int[][][] run(int n_personas, int n_topics, double alpha, double beta, double gamma, int n_iter, int burn_in, int subsampling, String outputDir, double slice_width) throws Exception {
 
         this.n_personas = n_personas;
+        this.n_topics = n_topics;
 
         // initialize arrays
         System.out.println("Initializing arrays");
@@ -190,11 +198,11 @@ class ERLDASampler {
         tuple_topics = new int[n_tuples];
         document_persona_counts = new int[n_docs][n_personas];
         document_persona_totals = new int[n_docs];
-        int [][][] persona_role_topic_counts = new int[n_personas][n_roles][n_topics];
-        int [][] topic_vocab_counts = new int[n_topics][vocab_size];
-        int [][] persona_role_counts = new int[n_personas][n_roles];
-        int [] topic_tuple_counts = new int[n_topics];
-        int [][][] persona_role_vocab_counts = new int[n_personas][n_roles][vocab_size];
+        persona_role_topic_counts = new int[n_personas][n_roles][n_topics];
+        topic_vocab_counts = new int[n_topics][vocab_size];
+        persona_role_counts = new int[n_personas][n_roles];
+        topic_tuple_counts = new int[n_topics];
+        persona_role_vocab_counts = new int[n_personas][n_roles][vocab_size];
 
         int [][] persona_head_word_counts = new int[n_personas][head_word_vocab_size];
 
@@ -261,6 +269,10 @@ class ERLDASampler {
             if ((i > 0) & (i % 20 == 0)) {
                 if ((i < 500) | (i % 100 == 0)) {
                     alpha = slice_sample_alpha(alpha, slice_width);
+                    beta = slice_sample_beta(beta, slice_width);
+                    gamma = slice_sample_gamma(gamma, slice_width);
+                    System.out.println("alpha=" + alpha + "; beta=" + beta + "; gamma=" + gamma);
+
                 }
             }
 
@@ -548,33 +560,33 @@ class ERLDASampler {
         }
     }
 
-    // TO DO: avoid calculating Gamma functions in full to avoid NaNs
     private double calc_log_p_alpha(double alpha) {
         double log_p = Math.log(alpha)  ;
         for (int d=0; d < n_docs; d++) {
             for (int k=0; k < n_personas; k++) {
-                log_p += Math.log(partial_gamma(alpha + document_persona_counts[d][k], document_persona_counts[d][k]));
+                //log_p += Math.log(partial_gamma(alpha + document_persona_counts[d][k], document_persona_counts[d][k]));
+                log_p += Gamma.logGamma(alpha + document_persona_counts[d][k]) - Gamma.logGamma(alpha);
             }
-            log_p -= Math.log(partial_gamma(n_personas * alpha + document_persona_totals[d], document_persona_totals[d]));
+            //log_p -= Math.log(partial_gamma(n_personas * alpha + document_persona_totals[d], document_persona_totals[d]));
+            log_p -= Gamma.logGamma(n_personas * alpha + document_persona_totals[d]) + Gamma.logGamma(n_personas * alpha);
         }
         return log_p;
     }
 
-
     private double slice_sample_alpha(double alpha, double slice_width) {
-        System.out.println("Tuning alpha");
+        //System.out.println("Tuning alpha");
         int alpha_count = 0;
         double log_p_current_alpha = calc_log_p_alpha(alpha);
         double log_alpha = Math.log(alpha);
         double u = Math.log(ThreadLocalRandom.current().nextDouble()) + log_p_current_alpha;
-        System.out.println("current log p = " + log_p_current_alpha);
-        System.out.println("Target log p = " + u);
+        //System.out.println("current log p = " + log_p_current_alpha);
+        //System.out.println("Target log p = " + u);
         double offset = ThreadLocalRandom.current().nextDouble();
         double left = log_alpha - offset * slice_width;
         double right = left + slice_width;
         double new_log_alpha = left + ThreadLocalRandom.current().nextDouble() * (right - left);
         double log_p_new_alpha = calc_log_p_alpha(Math.exp(new_log_alpha));
-        System.out.println("Left:" + Math.exp(left) + " Right:" + Math.exp(right) + "; new alpha = " + Math.exp(new_log_alpha) + "; log p = " + log_p_new_alpha);
+        //System.out.println("Left:" + Math.exp(left) + " Right:" + Math.exp(right) + "; new alpha = " + Math.exp(new_log_alpha) + "; log p = " + log_p_new_alpha);
         while (log_p_new_alpha < u) {
             if (new_log_alpha < log_alpha) {
                 left = new_log_alpha;
@@ -583,42 +595,98 @@ class ERLDASampler {
             }
             new_log_alpha = left + ThreadLocalRandom.current().nextDouble() * (right - left);
             log_p_new_alpha = calc_log_p_alpha(Math.exp(new_log_alpha));
-            System.out.println("Left:" + Math.exp(left) + " Right:" + Math.exp(right) + "; new alpha = " + Math.exp(new_log_alpha) + "; log p = " + log_p_new_alpha);
+            //System.out.println("Left:" + Math.exp(left) + " Right:" + Math.exp(right) + "; new alpha = " + Math.exp(new_log_alpha) + "; log p = " + log_p_new_alpha);
         }
         alpha = Math.exp(new_log_alpha);
-        System.out.println("new alpha = " + alpha);
+        //System.out.println("new alpha = " + alpha);
         return alpha;
     }
 
-    /*
-    private double slice_sample_beta(double beta, double slice_width) {
-        System.out.println("Tuning alpha");
-        int alpha_count = 0;
-        double log_p_current_alpha = calc_log_p_alpha(beta);
-        double log_alpha = Math.log(alpha);
-        double u = Math.log(ThreadLocalRandom.current().nextDouble()) + log_p_current_alpha;
-        System.out.println("current log p = " + log_p_current_alpha);
-        System.out.println("Target log p = " + u);
-        double offset = ThreadLocalRandom.current().nextDouble();
-        double left = log_alpha - offset * slice_width;
-        double right = left + slice_width;
-        double new_log_alpha = left + ThreadLocalRandom.current().nextDouble() * (right - left);
-        double log_p_new_alpha = calc_log_p_alpha(Math.exp(new_log_alpha));
-        System.out.println("Left:" + Math.exp(left) + " Right:" + Math.exp(right) + "; new alpha = " + Math.exp(new_log_alpha) + "; log p = " + log_p_new_alpha);
-        while (log_p_new_alpha < u) {
-            if (new_log_alpha < log_alpha) {
-                left = new_log_alpha;
-            } else {
-                right = new_log_alpha;
+    private double calc_log_p_beta(double beta) {
+        double log_p = Math.log(beta)  ;
+        for (int p=0; p < 1; p++) {
+            for (int r=0; r < 1; r++) {
+                for (int k = 0; k < n_topics; k++) {
+                    //log_p += Math.log(partial_gamma(beta + persona_role_topic_counts[p][r][k], persona_role_topic_counts[p][r][k]));
+                    log_p += Gamma.logGamma(beta + persona_role_topic_counts[p][r][k]) - Gamma.logGamma(beta);
+                }
+                //log_p -= Math.log(partial_gamma(n_topics * beta + persona_role_counts[p][r], persona_role_counts[p][r]));
+                log_p -= Gamma.logGamma(n_topics * beta + persona_role_counts[p][r]) + Gamma.logGamma(n_topics * beta);
             }
-            new_log_alpha = left + ThreadLocalRandom.current().nextDouble() * (right - left);
-            log_p_new_alpha = calc_log_p_alpha(Math.exp(new_log_alpha));
-            System.out.println("Left:" + Math.exp(left) + " Right:" + Math.exp(right) + "; new alpha = " + Math.exp(new_log_alpha) + "; log p = " + log_p_new_alpha);
         }
-        alpha = Math.exp(new_log_alpha);
-        System.out.println("new alpha = " + alpha);
-        return alpha;
+        return log_p;
     }
-    */
+
+    private double slice_sample_beta(double beta, double slice_width) {
+        //System.out.println("Tuning beta");
+        int beta_count = 0;
+        double log_p_current_beta = calc_log_p_beta(beta);
+        double log_beta = Math.log(beta);
+        double u = Math.log(ThreadLocalRandom.current().nextDouble()) + log_p_current_beta;
+        //System.out.println("current log p = " + log_p_current_beta);
+        //System.out.println("Target log p = " + u);
+        double offset = ThreadLocalRandom.current().nextDouble();
+        double left = log_beta - offset * slice_width;
+        double right = left + slice_width;
+        double new_log_beta = left + ThreadLocalRandom.current().nextDouble() * (right - left);
+        double log_p_new_beta = calc_log_p_beta(Math.exp(new_log_beta));
+        //System.out.println("Left:" + Math.exp(left) + " Right:" + Math.exp(right) + "; new beta = " + Math.exp(new_log_beta) + "; log p = " + log_p_new_beta);
+        while (log_p_new_beta < u) {
+            if (new_log_beta < log_beta) {
+                left = new_log_beta;
+            } else {
+                right = new_log_beta;
+            }
+            new_log_beta = left + ThreadLocalRandom.current().nextDouble() * (right - left);
+            log_p_new_beta = calc_log_p_beta(Math.exp(new_log_beta));
+            //System.out.println("Left:" + Math.exp(left) + " Right:" + Math.exp(right) + "; new beta = " + Math.exp(new_log_beta) + "; log p = " + log_p_new_beta);
+        }
+        beta = Math.exp(new_log_beta);
+        //System.out.println("new beta = " + beta);
+        return beta;
+    }
+
+
+    private double calc_log_p_gamma(double gamma) {
+        double log_p = Math.log(gamma)  ;
+        for (int k=0; k < n_topics; k++) {
+            for (int v=0; v < vocab_size; v++) {
+                //log_p += Math.log(partial_gamma(gamma + topic_vocab_counts[k][v], topic_vocab_counts[k][v]));
+                log_p += Gamma.logGamma(gamma + topic_vocab_counts[k][v]) - Gamma.logGamma(gamma);
+            }
+            //log_p -= Math.log(partial_gamma(vocab_size * gamma+ topic_tuple_counts[k], topic_tuple_counts[k]));l
+            log_p -= Gamma.logGamma(vocab_size * gamma + topic_tuple_counts[k]) + Gamma.logGamma(vocab_size * gamma);
+        }
+        return log_p;
+    }
+
+    private double slice_sample_gamma(double gamma, double slice_width) {
+        //System.out.println("Tuning gamma");
+        int gamma_count = 0;
+        double log_p_current_gamma = calc_log_p_gamma(gamma);
+        double log_gamma = Math.log(gamma);
+        double u = Math.log(ThreadLocalRandom.current().nextDouble()) + log_p_current_gamma;
+        //System.out.println("current log p = " + log_p_current_gamma);
+        //System.out.println("Target log p = " + u);
+        double offset = ThreadLocalRandom.current().nextDouble();
+        double left = log_gamma - offset * slice_width;
+        double right = left + slice_width;
+        double new_log_gamma = left + ThreadLocalRandom.current().nextDouble() * (right - left);
+        double log_p_new_gamma = calc_log_p_gamma(Math.exp(new_log_gamma));
+        //System.out.println("Left:" + Math.exp(left) + " Right:" + Math.exp(right) + "; new gamma = " + Math.exp(new_log_gamma) + "; log p = " + log_p_new_gamma);
+        while (log_p_new_gamma < u) {
+            if (new_log_gamma < log_gamma) {
+                left = new_log_gamma;
+            } else {
+                right = new_log_gamma;
+            }
+            new_log_gamma = left + ThreadLocalRandom.current().nextDouble() * (right - left);
+            log_p_new_gamma = calc_log_p_gamma(Math.exp(new_log_gamma));
+            //System.out.println("Left:" + Math.exp(left) + " Right:" + Math.exp(right) + "; new gamma = " + Math.exp(new_log_gamma) + "; log p = " + log_p_new_gamma);
+        }
+        gamma = Math.exp(new_log_gamma);
+        //System.out.println("new gamma = " + gamma);
+        return gamma;
+    }
 
 }
