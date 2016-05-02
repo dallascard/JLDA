@@ -47,7 +47,6 @@ class ERLDASampler {
     private String head_phrase_vocab[];
     private HashMap<Integer, List<Integer>> entity_head_phrases;
 
-
     private int entity_personas[];
     private int tuple_topics[];
 
@@ -107,8 +106,9 @@ class ERLDASampler {
         n_entities = entity_doc_json.size();
         System.out.println("n_entities=" + n_entities);
         n_head_words = head_vocab_json.size();
-        System.out.println("n_head_words" + n_head_words);
-        n_head_phrases = head_phrase_full_vocab_json.size();
+        System.out.println("n_head_words=" + n_head_words);
+        n_head_phrases = head_phrase_vocab_json.size();
+        System.out.println("n_head_phrases=" + n_head_phrases);
 
 
         // transfer entity to document mapping from json to array, and count the number of documents
