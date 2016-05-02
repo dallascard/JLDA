@@ -26,6 +26,8 @@ class ERLDASampler {
 
     private int head_word_vocab_size;
     private int n_head_words;
+    private int head_phrase_vocab_size;
+    private int n_head_phrases;
 
     private int entity_doc[];
     private int tuple_vocab[];
@@ -39,6 +41,12 @@ class ERLDASampler {
     private int head_entity_list[];
     private String head_word_vocab[];
     private HashMap<Integer, List<Integer>> entity_head_words;
+
+    private int head_phrase_vocab_list[];
+    private int head_phrase_entity_list[];
+    private String head_phrase_vocab[];
+    private HashMap<Integer, List<Integer>> entity_head_phrases;
+
 
     private int entity_personas[];
     private int tuple_topics[];
@@ -60,6 +68,7 @@ class ERLDASampler {
     private int t_persona_role_vocab_counts[][][];
     private int t_entity_persona_counts[][];
     private int t_persona_head_word_counts[][];
+    private int t_persona_head_phrase_counts[][];
 
     public ERLDASampler(String input_dir) throws Exception {
 
@@ -70,9 +79,13 @@ class ERLDASampler {
         Path vocab_file = Paths.get(input_dir, "vocab.json");
         Path docs_file = Paths.get(input_dir, "docs.json");
 
-        Path head_vocab_file = Paths.get(input_dir, "head_vocab_list.json");
-        Path head_entity_file = Paths.get(input_dir, "head_entity_list.json");
+        Path head_vocab_file = Paths.get(input_dir, "head_word_vocab_list.json");
+        Path head_entity_file = Paths.get(input_dir, "head_word_entity_list.json");
         Path head_word_vocab_file = Paths.get(input_dir, "head_word_vocab.json");
+
+        Path head_phrase_vocab_file = Paths.get(input_dir, "head_phrase_vocab_list.json");
+        Path head_phrase_entity_file = Paths.get(input_dir, "head_phrase_entity_list.json");
+        Path head_phrase_full_vocab_file = Paths.get(input_dir, "head_phrase_vocab.json");
 
         JSONParser parser = new JSONParser();
         JSONArray entity_doc_json = (JSONArray) parser.parse(new FileReader(entity_doc_file.toString()));
@@ -84,6 +97,10 @@ class ERLDASampler {
         JSONArray head_vocab_json = (JSONArray) parser.parse(new FileReader(head_vocab_file.toString()));
         JSONArray head_entity_json = (JSONArray) parser.parse(new FileReader(head_entity_file.toString()));
         JSONArray head_word_vocab_json = (JSONArray) parser.parse(new FileReader(head_word_vocab_file.toString()));
+        JSONArray head_phrase_vocab_json = (JSONArray) parser.parse(new FileReader(head_phrase_vocab_file.toString()));
+        JSONArray head_phrase_entity_json = (JSONArray) parser.parse(new FileReader(head_phrase_entity_file.toString()));
+        JSONArray head_phrase_full_vocab_json = (JSONArray) parser.parse(new FileReader(head_phrase_full_vocab_file.toString()));
+
 
         n_tuples = tuple_vocab_json.size();
         System.out.println("n_tuples=" + n_tuples);
@@ -91,6 +108,8 @@ class ERLDASampler {
         System.out.println("n_entities=" + n_entities);
         n_head_words = head_vocab_json.size();
         System.out.println("n_head_words" + n_head_words);
+        n_head_phrases = head_phrase_full_vocab_json.size();
+
 
         // transfer entity to document mapping from json to array, and count the number of documents
         n_docs = 0;
@@ -154,6 +173,11 @@ class ERLDASampler {
         head_entity_list = new int[n_head_words];
         entity_head_words = new HashMap<>();
 
+        head_phrase_vocab_list = new int[n_head_phrases];
+        head_phrase_entity_list = new int[n_head_phrases];
+        entity_head_phrases = new HashMap<>();
+
+
         head_word_vocab_size = 0;
         for (int i = 0; i < n_head_words; i++) {
             head_vocab_list[i] = ((Long) head_vocab_json.get(i)).intValue();
@@ -175,6 +199,30 @@ class ERLDASampler {
         for (int i = 0; i < head_word_vocab_size; i++) {
             head_word_vocab[i] = (String) head_word_vocab_json.get(i);
         }
+
+        head_phrase_vocab_size = 0;
+        for (int i = 0; i < n_head_phrases; i++) {
+            head_phrase_vocab_list[i] = ((Long) head_phrase_vocab_json.get(i)).intValue();
+            head_phrase_entity_list[i] = ((Long) head_phrase_entity_json.get(i)).intValue();
+            if (entity_head_phrases.get(head_phrase_entity_list[i]) == null) {
+                List<Integer> head_phrases = new ArrayList<>();
+                head_phrases.add(i);
+                entity_head_phrases.put(head_phrase_entity_list[i], head_phrases);
+            }
+            else {
+                List<Integer> head_phrases = entity_head_phrases.get(head_phrase_entity_list[i]);
+                head_phrases.add(i);
+                entity_head_phrases.put(head_phrase_entity_list[i], head_phrases);
+            }
+        }
+        head_phrase_vocab_size = head_phrase_full_vocab_json.size();
+
+        head_phrase_vocab = new String[head_phrase_vocab_size];
+        for (int i = 0; i < head_phrase_vocab_size; i++) {
+            head_phrase_vocab[i] = (String) head_phrase_full_vocab_json.get(i);
+        }
+
+
 
         System.out.println("number of documents=" + n_docs);
         System.out.println("number of tuples=" + n_tuples);
@@ -205,6 +253,7 @@ class ERLDASampler {
         persona_role_vocab_counts = new int[n_personas][n_roles][vocab_size];
 
         int [][] persona_head_word_counts = new int[n_personas][head_word_vocab_size];
+        int [][] persona_head_phrase_counts = new int[n_personas][head_phrase_vocab_size];
 
         t_document_persona_counts = new int[n_docs][n_personas];
         t_persona_role_topic_counts = new int[n_personas][n_roles][n_topics];
@@ -214,6 +263,7 @@ class ERLDASampler {
         t_persona_role_vocab_counts = new int[n_personas][n_roles][vocab_size];
         t_entity_persona_counts = new int[n_entities][n_personas];
         t_persona_head_word_counts= new int[n_personas][head_word_vocab_size];
+        t_persona_head_phrase_counts= new int[n_personas][head_phrase_vocab_size];
 
         // do random initalization
         for (int e=0; e < n_entities; e++) {
@@ -259,6 +309,13 @@ class ERLDASampler {
             int v_j = head_vocab_list[j];
             int p_j = entity_personas[e_j];
             persona_head_word_counts[p_j][v_j] += 1;
+        }
+
+        for (int j=0; j < n_head_phrases; j++) {
+            int e_j = head_phrase_entity_list[j];
+            int v_j = head_phrase_vocab_list[j];
+            int p_j = entity_personas[e_j];
+            persona_head_phrase_counts[p_j][v_j] += 1;
         }
 
         // start sampling
@@ -352,6 +409,12 @@ class ERLDASampler {
                     persona_head_word_counts[p_e][v_t] -= 1;
                     persona_head_word_counts[p][v_t] += 1;
                 }
+                List<Integer> head_phrases = entity_head_phrases.get(e);
+                for (int t : head_phrases) {
+                    int v_t = head_phrase_vocab_list[t];
+                    persona_head_phrase_counts[p_e][v_t] -= 1;
+                    persona_head_phrase_counts[p][v_t] += 1;
+                }
             }
 
             // then sample topics
@@ -413,6 +476,9 @@ class ERLDASampler {
                         }
                         for (int v = 0; v < head_word_vocab_size; v++) {
                             t_persona_head_word_counts[p][v] += persona_head_word_counts[p][v];
+                        }
+                        for (int v = 0; v < head_phrase_vocab_size; v++) {
+                            t_persona_head_phrase_counts[p][v] += persona_head_phrase_counts[p][v];
                         }
                     }
                     for (int k = 0; k < n_topics; k++) {
@@ -534,6 +600,17 @@ class ERLDASampler {
                 file.write(head_word_vocab[v] + ',');
                 for (int p=0; p < n_personas; p++) {
                     file.write(persona_head_word_counts[p][v] + ",");
+                }
+                file.write("\n");
+            }
+        }
+
+        output_file = Paths.get(outputDir, "persona_head_phrase_counts.csv");
+        try (FileWriter file = new FileWriter(output_file.toString())) {
+            for (int v=0; v < head_phrase_vocab_size; v++) {
+                file.write(head_phrase_vocab[v] + ',');
+                for (int p=0; p < n_personas; p++) {
+                    file.write(persona_head_phrase_counts[p][v] + ",");
                 }
                 file.write("\n");
             }
