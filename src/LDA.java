@@ -57,6 +57,8 @@ public class LDA {
 
         String vocab[] = LDASampler.get_vocab();
 
+        // TODO: redo this in a safe way
+        /*
         System.out.println("Writing results to file");
         //String output_dir = "/Users/dcard/Projects/CMU/ARK/guac/datasets/mfc_v2/lda/";
         for (int k=0; k < n_topics; k++) {
@@ -69,8 +71,8 @@ public class LDA {
             try (FileWriter file = new FileWriter(output_file.toString())) {
                 file.write(obj.toJSONString());
             }
-
         }
+        */
 
     }
 
