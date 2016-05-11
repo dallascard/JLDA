@@ -23,26 +23,16 @@ import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 import java.io.BufferedWriter;
 
-
-import cern.colt.matrix.tdouble.impl.DenseLargeDoubleMatrix3D;
-import cern.jet.stat.tdouble.Gamma;
-import org.json.simple.JSONArray;
-import org.json.simple.JSONObject;
-import org.json.simple.parser.JSONParser;
-import cern.jet.stat.tdouble.Gamma;
 import org.json.simple.JSONArray;
 import org.json.simple.parser.JSONParser;
-import java.io.FileReader;
-import java.io.FileWriter;
-import java.nio.file.Paths;
-import java.util.*;
-import java.util.concurrent.ThreadLocalRandom;
-import java.nio.file.Path;
 
 import org.ejml.data.DenseMatrix64F;
 import org.ejml.ops.CommonOps;
 import org.ejml.interfaces.linsol.LinearSolver;
 import org.ejml.factory.LinearSolverFactory;
+
+import org.apache.commons.math3.special.Gamma;
+
 
 public class GaussianLDA {
 
@@ -57,7 +47,6 @@ public class GaussianLDA {
         params.put("-k", "25");                     // n_topics
         params.put("-a", "1");                      // alpha
         params.put("-b", "1");                      // beta
-        params.put("-g", "1");                      // gamma
         params.put("-i", "3000");                    // n_iter
         params.put("-u", "1000");                     // burn_in
         params.put("-s", "25");                      // subsampling
@@ -92,7 +81,6 @@ public class GaussianLDA {
 
         double alpha = Double.parseDouble(params.get("-a"));
         double beta = Double.parseDouble(params.get("-b"));
-        double gamma = Double.parseDouble(params.get("-g"));
         int n_topics = Integer.parseInt(params.get("-k"));
         int n_personas = Integer.parseInt(params.get("-p"));
 
@@ -106,7 +94,7 @@ public class GaussianLDA {
         //ELDASampler sampler = new ELDASampler(entity_doc_file, tuple_vocab_file, tuple_entity_file, vocab_file, docs_file);
         GaussianLDASampler sampler = new GaussianLDASampler(input_dir, vec_size);
         sampler.initialize(n_personas, n_topics);
-        sampler.run(alpha, beta, gamma, n_iter, burn_in, subsampling, output_dir, slice_width);
+        sampler.run(alpha, beta, n_iter, burn_in, subsampling, output_dir, slice_width);
 
     }
 }
@@ -486,11 +474,7 @@ class GaussianLDASampler {
 
     }
 
-    public String[] get_vocab() {
-        return vocab;
-    }
-
-    public int[][][] run(double alpha, double beta, double gamma, int n_iter, int burn_in, int subsampling, String outputDir, double slice_width) throws Exception {
+    public int[][][] run(double alpha, double beta, int n_iter, int burn_in, int subsampling, String outputDir, double slice_width) throws Exception {
 
         // Determine random orders in which to visit the entities and tuples
         List<Integer> entity_order = new ArrayList<>();
@@ -512,8 +496,7 @@ class GaussianLDASampler {
                 if ((i < 500) | (i % 100 == 0)) {
                     alpha = slice_sample_alpha(alpha, slice_width);
                     beta = slice_sample_beta(beta, slice_width);
-                    gamma = slice_sample_gamma(gamma, slice_width);
-                    System.out.println("alpha=" + alpha + "; beta=" + beta + "; gamma=" + gamma);
+                    System.out.println("alpha=" + alpha + "; beta=" + beta);
 
                 }
             }
@@ -619,11 +602,58 @@ class GaussianLDASampler {
                 topic_vocab_counts[z_j][v_j] -= 1;
                 topic_tuple_counts[z_j] -= 1;
 
+                // subtract the vector for this tuple from the corresponding topic sum and sum squared counters
+                DenseMatrix64F topic_vector_transpose = new DenseMatrix64F(1, Data.D);
+                topic_vector_transpose = CommonOps.transpose(data_vectors[j], topic_vector_transpose);
+                DenseMatrix64F squared_vector = new DenseMatrix64F(Data.D, Data.D);
+                CommonOps.mult(data_vectors[j], topic_vector_transpose, squared_vector);
+
+                DenseMatrix64F old_topic_sum = sum_topic_vectors.get(z_j);
+                DenseMatrix64F old_topic_sum_squared = sum_squared_topic_vectors.get(z_j);
+                DenseMatrix64F new_topic_sum = new DenseMatrix64F(Data.D, 1);
+                CommonOps.sub(old_topic_sum, data_vectors[j], new_topic_sum); //subtracting the vector of this customer.
+                sum_topic_vectors.set(z_j, new_topic_sum);
+
+                DenseMatrix64F new_topic_sum_squared = new DenseMatrix64F(Data.D, Data.D);
+                CommonOps.sub(old_topic_sum_squared, squared_vector, new_topic_sum_squared);
+                sum_squared_topic_vectors.set(z_j, new_topic_sum_squared);
+
+                // now recalculate topic parameters
+                calculate_topic_params(z_j);
+
+                ArrayList<Double> posterior = new ArrayList<>();
+                Double max = Double.NEGATIVE_INFINITY;
+                //go over each topic
+                for(int k = 0; k < n_topics; k++)
+                {
+                    double count = persona_role_topic_counts[p_j][r_j][k] + beta;
+                    double logLikelihood = log_multivariate_t_density(data_vectors[z_j], k);
+                    //add log prior in the posterior vector
+                    double logPosterior = Math.log(count) + logLikelihood;
+                    posterior.add(logPosterior);
+                    if(logPosterior > max)
+                        max = logPosterior;
+                }
+                //to prevent overflow, subtract by log(p_max). This is because when we will be normalizing after exponentiating, each entry will be exp(log p_i - log p_max )/\Sigma_i exp(log p_i - log p_max)
+                //the log p_max cancels put and prevents overflow in the exponentiating phase.
+                for(int k = 0 ; k < n_topics; k++)
+                {
+                    double p = posterior.get(k);
+                    p = p - max;
+                    double expP = Math.exp(p);
+                    posterior.set(k, expP);
+                }
+
+                //now sample a topic from this posterior vector. The sample method will normalize the vector
+                //so no need to normalize now.
+                int k = Util.sample(posterior);
+
+                /*
+                // OLD METHOD pre-Guassian
                 // compute probabilities
                 double p_sum = 0;
                 for (int k = 0; k < n_topics; k++) {
                     pr[k] = (persona_role_topic_counts[p_j][r_j][k] + beta) * (topic_vocab_counts[k][v_j] + gamma) / (topic_tuple_counts[k] + gamma * vocab_size);
-                    //pr[k] = (topic_vocab_counts[k][v_j] + gamma) / (topic_tuple_counts[k] + gamma * vocab_size);
                     assert pr[k] > 0;
                     p_sum += pr[k];
                 }
@@ -636,11 +666,22 @@ class GaussianLDASampler {
                     k += 1;
                     temp += pr[k];
                 }
+                */
 
+                // update assignments and counts
                 tuple_topics[j] = k;
                 persona_role_topic_counts[p_j][r_j][k] += 1;
                 topic_vocab_counts[k][v_j] += 1;
                 topic_tuple_counts[k] += 1;
+
+                // update sum and sum squared trackers
+                DenseMatrix64F sum = sum_topic_vectors.get(k);
+                CommonOps.add(data_vectors[j], sum, sum);
+
+                DenseMatrix64F sum_squared = sum_squared_topic_vectors.get(k);
+                CommonOps.add(sum_squared, squared_vector, sum_squared);
+
+                calculate_topic_params(k); //update the table params.
 
             }
 
@@ -809,31 +850,12 @@ class GaussianLDASampler {
     }
 
 
-    // compute gamma(start)/gamma(start-steps) without actually computing the gamma functions;
-    // note: gamma(t+1) = t * gamma(t); gamma(2)=gamma(1)=1
-    private double partial_gamma(double start, int steps) {
-        if (start == steps) {
-            return Gamma.gamma(start);
-        }
-        else if (steps > start) {
-            return -1;
-        }
-        else if (steps == 0) {
-            return 1;
-        }
-        else {
-            return partial_gamma(start-1, steps-1) * (start-1);
-        }
-    }
-
     private double calc_log_p_alpha(double alpha) {
         double log_p = Math.log(alpha)  ;
         for (int d=0; d < n_docs; d++) {
             for (int k=0; k < n_personas; k++) {
-                //log_p += Math.log(partial_gamma(alpha + document_persona_counts[d][k], document_persona_counts[d][k]));
                 log_p += Gamma.logGamma(alpha + document_persona_counts[d][k]) - Gamma.logGamma(alpha);
             }
-            //log_p -= Math.log(partial_gamma(n_personas * alpha + document_persona_totals[d], document_persona_totals[d]));
             log_p -= Gamma.logGamma(n_personas * alpha + document_persona_totals[d]) + Gamma.logGamma(n_personas * alpha);
         }
         return log_p;
@@ -873,10 +895,8 @@ class GaussianLDASampler {
         for (int p=0; p < 1; p++) {
             for (int r=0; r < 1; r++) {
                 for (int k = 0; k < n_topics; k++) {
-                    //log_p += Math.log(partial_gamma(beta + persona_role_topic_counts[p][r][k], persona_role_topic_counts[p][r][k]));
                     log_p += Gamma.logGamma(beta + persona_role_topic_counts[p][r][k]) - Gamma.logGamma(beta);
                 }
-                //log_p -= Math.log(partial_gamma(n_topics * beta + persona_role_counts[p][r], persona_role_counts[p][r]));
                 log_p -= Gamma.logGamma(n_topics * beta + persona_role_counts[p][r]) + Gamma.logGamma(n_topics * beta);
             }
         }
@@ -910,49 +930,6 @@ class GaussianLDASampler {
         beta = Math.exp(new_log_beta);
         //System.out.println("new beta = " + beta);
         return beta;
-    }
-
-
-    private double calc_log_p_gamma(double gamma) {
-        double log_p = Math.log(gamma)  ;
-        for (int k=0; k < n_topics; k++) {
-            for (int v=0; v < vocab_size; v++) {
-                //log_p += Math.log(partial_gamma(gamma + topic_vocab_counts[k][v], topic_vocab_counts[k][v]));
-                log_p += Gamma.logGamma(gamma + topic_vocab_counts[k][v]) - Gamma.logGamma(gamma);
-            }
-            //log_p -= Math.log(partial_gamma(vocab_size * gamma+ topic_tuple_counts[k], topic_tuple_counts[k]));l
-            log_p -= Gamma.logGamma(vocab_size * gamma + topic_tuple_counts[k]) + Gamma.logGamma(vocab_size * gamma);
-        }
-        return log_p;
-    }
-
-    private double slice_sample_gamma(double gamma, double slice_width) {
-        //System.out.println("Tuning gamma");
-        int gamma_count = 0;
-        double log_p_current_gamma = calc_log_p_gamma(gamma);
-        double log_gamma = Math.log(gamma);
-        double u = Math.log(ThreadLocalRandom.current().nextDouble()) + log_p_current_gamma;
-        //System.out.println("current log p = " + log_p_current_gamma);
-        //System.out.println("Target log p = " + u);
-        double offset = ThreadLocalRandom.current().nextDouble();
-        double left = log_gamma - offset * slice_width;
-        double right = left + slice_width;
-        double new_log_gamma = left + ThreadLocalRandom.current().nextDouble() * (right - left);
-        double log_p_new_gamma = calc_log_p_gamma(Math.exp(new_log_gamma));
-        //System.out.println("Left:" + Math.exp(left) + " Right:" + Math.exp(right) + "; new gamma = " + Math.exp(new_log_gamma) + "; log p = " + log_p_new_gamma);
-        while (log_p_new_gamma < u) {
-            if (new_log_gamma < log_gamma) {
-                left = new_log_gamma;
-            } else {
-                right = new_log_gamma;
-            }
-            new_log_gamma = left + ThreadLocalRandom.current().nextDouble() * (right - left);
-            log_p_new_gamma = calc_log_p_gamma(Math.exp(new_log_gamma));
-            //System.out.println("Left:" + Math.exp(left) + " Right:" + Math.exp(right) + "; new gamma = " + Math.exp(new_log_gamma) + "; log p = " + log_p_new_gamma);
-        }
-        gamma = Math.exp(new_log_gamma);
-        //System.out.println("new gamma = " + gamma);
-        return gamma;
     }
 
 
@@ -1065,6 +1042,44 @@ class GaussianLDASampler {
             topic_inverse_covariances.set(k, sigmaNInv);//storing the inverse covariances
         else
             topic_inverse_covariances.add(sigmaNInv);
+    }
+
+
+    /**
+     * @param x data point
+     * @param k topic
+     * @return
+     */
+    //private static double logMultivariateTDensity(DenseMatrix64F x, DenseMatrix64F mu, DenseMatrix64F sigmaInv,double det, double nu)
+    private double log_multivariate_t_density(DenseMatrix64F x, int k)
+    {
+        DenseMatrix64F mu = topic_means.get(k);
+        DenseMatrix64F sigmaInv = topic_inverse_covariances.get(k);
+        double det = determinants.get(k);
+        int count = topic_tuple_counts[k]; //this is the prior
+        //Now calculate the likelihood
+        //calculate degrees of freedom of the T-distribution
+        double nu = prior.nu_0 + count - Data.D + 1;
+        //calculate (x = mu)
+        DenseMatrix64F x_minus_mu = new DenseMatrix64F(Data.D, 1);
+        CommonOps.sub(x, mu, x_minus_mu);
+        //take the transpose
+        DenseMatrix64F x_minus_mu_transpose = new DenseMatrix64F(1, Data.D);
+        x_minus_mu_transpose  = CommonOps.transpose(x_minus_mu, x_minus_mu_transpose );
+        //Calculate (x = mu)^TSigma^(-1)(x = mu)
+        DenseMatrix64F prod = new DenseMatrix64F(1, Data.D);
+        CommonOps.mult(x_minus_mu_transpose, sigmaInv, prod);
+        DenseMatrix64F prod1 = new DenseMatrix64F(1, 1);
+        CommonOps.mult(prod, x_minus_mu, prod1);
+        //Finally get the value in a double.
+        assert prod1.numCols == 1;
+        assert prod1.numRows == 1;
+        double val = prod1.get(0, 0); //prod1 is a 1x1 matrix
+        //System.out.println("val = "+val);
+        //System.out.println("det = "+det);
+        double logprob = 0.0;
+        logprob = Gamma.logGamma((nu + Data.D)/2) - (Gamma.logGamma(nu/2) + Data.D/2 * (Math.log(nu)+Math.log(Math.PI)) + 0.5 * Math.log(det) + (nu + Data.D)/2* Math.log(1+val/nu));
+        return logprob;
     }
 
 
