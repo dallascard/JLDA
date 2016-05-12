@@ -15,7 +15,7 @@ public class Data {
     /**
      * Number of data points
      */
-    public static int numVectors;
+    public static int n_tuples;   // IS THIS CORRECT?
 
 
 }

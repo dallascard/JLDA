@@ -223,7 +223,7 @@ public class Util {
     public static DenseMatrix64F getSampleCovariance(DenseMatrix64F[] data,DenseMatrix64F mean )
     {
         DenseMatrix64F sampleCovariance = new DenseMatrix64F(Data.D, Data.D);
-        for(int i=0;i<Data.numVectors;i++)
+        for(int i=0;i<Data.n_tuples;i++)
         {
             DenseMatrix64F x_minus_x_bar = new DenseMatrix64F(Data.D,1);
             CommonOps.add(data[i], x_minus_x_bar, x_minus_x_bar);
@@ -233,7 +233,7 @@ public class Util {
             DenseMatrix64F mul = new DenseMatrix64F(Data.D, Data.D);
             CommonOps.mult(x_minus_x_bar, x_minus_x_bar_T, mul);//(x_i - x_bar)(x_i - x_bar)^T
             CommonOps.add(mul, sampleCovariance,sampleCovariance);
-            CommonOps.divide(Data.numVectors - 1 ,sampleCovariance);
+            CommonOps.divide(Data.n_tuples - 1 ,sampleCovariance);
         }
         return sampleCovariance;
     }

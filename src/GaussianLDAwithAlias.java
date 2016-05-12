@@ -12,16 +12,11 @@ Citation:
 }
 */
 
-// note: I imported some of the Cholesky and Aliasing stuff into here, but not using it; see GaussianLDAwithAlias
-
 import java.io.FileReader;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
+import java.util.*;
 import java.io.FileWriter;
-import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 import java.io.BufferedWriter;
 
@@ -31,14 +26,14 @@ import org.json.simple.parser.JSONParser;
 import org.ejml.data.DenseMatrix64F;
 import org.ejml.ops.CommonOps;
 import org.ejml.interfaces.linsol.LinearSolver;
-import org.ejml.factory.LinearSolverFactory;
+import org.ejml.alg.dense.decomposition.TriangularSolver;
 import org.ejml.factory.DecompositionFactory;
 import org.ejml.interfaces.decomposition.CholeskyDecomposition;
 
 import org.apache.commons.math3.special.Gamma;
 
 
-public class GaussianLDA {
+public class GaussianLDAwithAlias {
 
     public static void main(String args[]) throws Exception {
 
@@ -96,7 +91,7 @@ public class GaussianLDA {
         int vec_size = Integer.parseInt(params.get("-v"));
 
         //ELDASampler sampler = new ELDASampler(entity_doc_file, tuple_vocab_file, tuple_entity_file, vocab_file, docs_file);
-        GaussianLDASampler sampler = new GaussianLDASampler(input_dir, vec_size);
+        GaussianLDAwithAliasSampler sampler = new GaussianLDAwithAliasSampler(input_dir, vec_size);
         sampler.initialize(n_personas, n_topics);
         sampler.run(alpha, beta, n_iter, burn_in, subsampling, output_dir, slice_width);
 
@@ -104,7 +99,7 @@ public class GaussianLDA {
 }
 
 
-class GaussianLDASampler {
+class GaussianLDAwithAliasSampler {
     private int vocab_size;
     private int n_tuples;
     private int n_docs;     // N
@@ -195,7 +190,7 @@ class GaussianLDASampler {
     private static BufferedWriter perplexities = null;
 
     // have the constructor read in the data
-    public GaussianLDASampler(String input_dir, int dx) throws Exception {
+    public GaussianLDAwithAliasSampler(String input_dir, int dx) throws Exception {
 
         Data.D = dx;
 
@@ -392,6 +387,7 @@ class GaussianLDASampler {
 
         double scaleTdistrn = (prior.k_0+1) / (double)(prior.k_0 * (prior.nu_0 - Data.D + 1));
 
+        /*
         double degOfFreedom = prior.nu_0 - Data.D + 1;
         //Now calculate the covariance matrix of the multivariate T-distribution
         double coeff = (double) (prior.k_0 + 1) / (prior.k_0 * (degOfFreedom));
@@ -406,8 +402,24 @@ class GaussianLDASampler {
         solver.invert(sigma_TInv);
 
         double sigmaTDet = CommonOps.det(sigma_T);
+        */
 
-        // initialize all of our computational shortcuts to zeros
+
+        for(int k = 0; k < n_topics; k++) {
+            DenseMatrix64F prior_mean = new DenseMatrix64F(prior.mu_0);
+            DenseMatrix64F initial_cholesky = new DenseMatrix64F(chol_sigma_0);
+            //calculate the 0.5*log(det) + D/2*scaleTdistrn; the scaleTdistrn is because the posterior predictive distribution sends in a scaled value of \Sigma
+            double log_det = 0.0;
+            for(int m = 0; m < Data.D; m++)
+                log_det = log_det + Math.log(chol_sigma_0.get(m, m));
+            log_det += Data.D * Math.log(scaleTdistrn) / (double) 2;
+            log_determinants.add(log_det);
+            topic_means.add(prior_mean);
+            topic_cholesky_l_triangular_mat.add(initial_cholesky);
+        }
+
+        /*
+        // initialize all of our compuational shortcuts to zeros
         for (int k = 0; k < n_topics; k++) {
             DenseMatrix64F zero = new DenseMatrix64F(Data.D, 1);
             sum_topic_vectors.add(zero);
@@ -419,6 +431,7 @@ class GaussianLDASampler {
             zero = new DenseMatrix64F(Data.D, 1);
             topic_means.add(zero);
         }
+        */
 
         // set up Aliasing stuff
         q = new VoseAlias[Data.n_tuples];
@@ -454,6 +467,9 @@ class GaussianLDASampler {
             topic_tuple_counts[k] += 1;
             persona_role_vocab_counts[p_j][r_j][v_j] += 1;
 
+            update_topic_params(k, j, false);
+
+            /*
             // update sum and squard sum trackers
             DenseMatrix64F sum = sum_topic_vectors.get(k);
             CommonOps.add(data_vectors[j], sum, sum);
@@ -464,6 +480,7 @@ class GaussianLDASampler {
             //Multiply x_ix_i^T and add it to the sum_squared for this topic
             CommonOps.mult(data_vectors[j], tuple_vector_transpose, square_vector);
             CommonOps.add(sum_squared, square_vector, sum_squared);
+            */
         }
 
         System.out.println(n_tuples + " tuples");
@@ -485,10 +502,12 @@ class GaussianLDASampler {
         }
         */
 
+        /*
         // compute initial topic parameters for each topic
         for (int k = 0; k < n_topics; k++) {
             calculate_topic_params(k);
         }
+        */
 
         //double check again
         for (int k = 0; k < n_topics; k++) {
@@ -519,6 +538,9 @@ class GaussianLDASampler {
         for (int i = 0; i < n_tuples; i++) {
             tuple_order.add(i);
         }
+
+        // set up alias mechanism (this may not work without the static / multithreading stuff...)
+        init_run();
 
         // start sampling
         System.out.println("Doing burn-in");
@@ -621,9 +643,9 @@ class GaussianLDASampler {
             }
 
             // then sample topics
-            for (int q=0; q < n_tuples; q++) {
+            for (int item = 0; item < n_tuples; item++) {
                 double pr[] = new double[n_topics];
-                int j = tuple_order.get(q);
+                int j = (int) tuple_order.get(item);
                 int e_j = tuple_entity[j];
                 int z_j = tuple_topics[j];
                 int r_j = tuple_role[j];
@@ -635,6 +657,10 @@ class GaussianLDASampler {
                 topic_vocab_counts[z_j][v_j] -= 1;
                 topic_tuple_counts[z_j] -= 1;
 
+                // update topic params, which takes care of removing this instance
+                update_topic_params(z_j, j, true);
+
+                /*
                 // subtract the vector for this tuple from the corresponding topic sum and sum squared counters
                 DenseMatrix64F topic_vector_transpose = new DenseMatrix64F(1, Data.D);
                 topic_vector_transpose = CommonOps.transpose(data_vectors[j], topic_vector_transpose);
@@ -653,53 +679,80 @@ class GaussianLDASampler {
 
                 // now recalculate topic parameters
                 calculate_topic_params(z_j);
+                */
 
                 ArrayList<Double> posterior = new ArrayList<>();
+                ArrayList<Integer> non_zero_topic_index = new ArrayList<>();
                 Double max = Double.NEGATIVE_INFINITY;
+                double p_sum = 0;
                 //go over each topic
                 for(int k = 0; k < n_topics; k++)
                 {
-                    double count = persona_role_topic_counts[p_j][r_j][k] + beta;
-                    double logLikelihood = log_multivariate_t_density(data_vectors[z_j], k);
-                    //add log prior in the posterior vector
-                    double logPosterior = Math.log(count) + logLikelihood;
-                    posterior.add(logPosterior);
-                    if(logPosterior > max)
-                        max = logPosterior;
+                    if(persona_role_topic_counts[p_j][r_j][k] > 0)
+                    {
+                        //Now calculate the likelihood
+                        //double count = tableCountsPerDoc[k][d]+alpha;//here count is the number of words of the same doc which are sitting in the same topic.
+                        // DBC: seems like this is not adding in smoothing parameters
+                        // DBC: I guess the point is to limit number of non-zero and then do MH to correct
+                        double logLikelihood = log_multivariate_t_density(data_vectors[j], k);
+                        //System.out.println(custId+" "+k+" "+logLikelihood);
+                        //add log prior in the posterior vector
+                        //double logPosterior = Math.log(count) + logLikelihood;
+                        double logPosterior = Math.log(persona_role_topic_counts[p_j][r_j][k]) + logLikelihood;
+                        non_zero_topic_index.add(k);
+                        posterior.add(logPosterior);
+                        if(logPosterior > max)
+                            max = logPosterior;
+                    }
                 }
                 //to prevent overflow, subtract by log(p_max). This is because when we will be normalizing after exponentiating, each entry will be exp(log p_i - log p_max )/\Sigma_i exp(log p_i - log p_max)
                 //the log p_max cancels put and prevents overflow in the exponentiating phase.
-                for(int k = 0 ; k < n_topics; k++)
+                for(int k = 0 ; k < posterior.size(); k++)
                 {
                     double p = posterior.get(k);
                     p = p - max;
                     double expP = Math.exp(p);
-                    posterior.set(k, expP);
+                    p_sum += expP;
+                    posterior.set(k, p_sum);
                 }
 
-                //now sample a topic from this posterior vector. The sample method will normalize the vector
+                //now sample an index from this posterior vector. The sample method will normalize the vector
                 //so no need to normalize now.
-                int k = Util.sample(posterior);
+                double select_pr = p_sum / (p_sum + alpha * q[j].wsum);
 
-                /*
-                // OLD METHOD pre-Guassian
-                // compute probabilities
-                double p_sum = 0;
-                for (int k = 0; k < n_topics; k++) {
-                    pr[k] = (persona_role_topic_counts[p_j][r_j][k] + beta) * (topic_vocab_counts[k][v_j] + gamma) / (topic_tuple_counts[k] + gamma * vocab_size);
-                    assert pr[k] > 0;
-                    p_sum += pr[k];
-                }
+                //MHV to draw new topic
+                Random rand = new Random();
+                int k = -1;
+                for (int r = 0; r < MH_STEPS; ++r)
+                {
+                    //1. Flip a coin
+                    if(rand.nextDouble() < select_pr)
+                    {
+                        double u = rand.nextDouble() * p_sum;
+                        int temp = Util.binSearchArrayList(posterior, u, 0, posterior.size() - 1);
+                        k = non_zero_topic_index.get(temp);
+                    }
+                    else
+                    {
+                        k = q[j].sampleVose();
+                    }
 
-                // sample a topic
-                double f = ThreadLocalRandom.current().nextDouble() * p_sum;
-                int k = 0;
-                double temp = pr[k];
-                while (f > temp) {
-                    k += 1;
-                    temp += pr[k];
+                    if (z_j != k)
+                    {
+                        //2. Find acceptance probability
+                        double temp_old = log_multivariate_t_density(data_vectors[j], z_j);
+                        double temp_new = log_multivariate_t_density(data_vectors[j], k);
+                        double acceptance = (persona_role_topic_counts[p_j][r_j][k] + alpha) / (persona_role_topic_counts[p_j][r_j][z_j] + alpha)
+                                *Math.exp(temp_new - temp_old)
+                                * (persona_role_topic_counts[p_j][r_j][z_j] * temp_old + alpha * q[j].w[z_j])
+                                / (persona_role_topic_counts[p_j][r_j][k] * temp_new + alpha * q[j].w[k]);
+
+                        //3. Compare against uniform[0,1]
+                        double u = rand.nextDouble();
+                        if (u < acceptance)
+                            z_j = k;
+                    }
                 }
-                */
 
                 // update assignments and counts
                 tuple_topics[j] = k;
@@ -707,14 +760,17 @@ class GaussianLDASampler {
                 topic_vocab_counts[k][v_j] += 1;
                 topic_tuple_counts[k] += 1;
 
+                /*
                 // update sum and sum squared trackers
                 DenseMatrix64F sum = sum_topic_vectors.get(k);
                 CommonOps.add(data_vectors[j], sum, sum);
 
                 DenseMatrix64F sum_squared = sum_squared_topic_vectors.get(k);
                 CommonOps.add(sum_squared, squared_vector, sum_squared);
+                */
 
-                calculate_topic_params(k); //update the table params.
+                //calculate_topic_params(k); //update the table params.
+                update_topic_params(k, j, false);
 
             }
 
@@ -1109,37 +1165,64 @@ class GaussianLDASampler {
      * @param k topic
      * @return
      */
-    //private static double logMultivariateTDensity(DenseMatrix64F x, DenseMatrix64F mu, DenseMatrix64F sigmaInv,double det, double nu)
     private double log_multivariate_t_density(DenseMatrix64F x, int k)
     {
-        DenseMatrix64F mu = topic_means.get(k);
-        DenseMatrix64F sigmaInv = topic_inverse_covariances.get(k);
-        double det = determinants.get(k);
-        int count = topic_tuple_counts[k]; //this is the prior
-        //Now calculate the likelihood
-        //calculate degrees of freedom of the T-distribution
-        double nu = prior.nu_0 + count - Data.D + 1;
-        //calculate (x = mu)
-        DenseMatrix64F x_minus_mu = new DenseMatrix64F(Data.D, 1);
-        CommonOps.sub(x, mu, x_minus_mu);
-        //take the transpose
-        DenseMatrix64F x_minus_mu_transpose = new DenseMatrix64F(1, Data.D);
-        x_minus_mu_transpose  = CommonOps.transpose(x_minus_mu, x_minus_mu_transpose );
-        //Calculate (x = mu)^TSigma^(-1)(x = mu)
-        DenseMatrix64F prod = new DenseMatrix64F(1, Data.D);
-        CommonOps.mult(x_minus_mu_transpose, sigmaInv, prod);
-        DenseMatrix64F prod1 = new DenseMatrix64F(1, 1);
-        CommonOps.mult(prod, x_minus_mu, prod1);
-        //Finally get the value in a double.
-        assert prod1.numCols == 1;
-        assert prod1.numRows == 1;
-        double val = prod1.get(0, 0); //prod1 is a 1x1 matrix
-        //System.out.println("val = "+val);
-        //System.out.println("det = "+det);
         double logprob = 0.0;
-        logprob = Gamma.logGamma((nu + Data.D)/2) - (Gamma.logGamma(nu/2) + Data.D/2 * (Math.log(nu)+Math.log(Math.PI)) + 0.5 * Math.log(det) + (nu + Data.D)/2* Math.log(1+val/nu));
+        int count = topic_tuple_counts[k];
+        double k_n = prior.k_0 + count;
+        double nu_n = prior.nu_0 + count;
+        double scaleTdistrn = Math.sqrt((k_n + 1) / (k_n * (nu_n - Data.D + 1)));
+        double nu = prior.nu_0 + count - Data.D + 1;
+        //Since I am storing lower triangular matrices, therefore it is easy to calculate the value of (x-\mu)^T\Sigma^-1(x-\mu)
+        //therefore I am gonna use triangular solver
+        //first calculate (x-mu)
+        DenseMatrix64F x_minus_mu = new DenseMatrix64F(Data.D, 1);
+        CommonOps.sub(x, topic_means.get(k), x_minus_mu);
+        //now scale the lower triangular matrix
+        DenseMatrix64F l_tri_chol = new DenseMatrix64F(Data.D, Data.D);
+        CommonOps.scale(scaleTdistrn, topic_cholesky_l_triangular_mat.get(k), l_tri_chol);
+        TriangularSolver.solveL(l_tri_chol.data, x_minus_mu.data, Data.D); //now x_minus_mu has the solved value
+        //Now take xTx
+        DenseMatrix64F x_minus_mu_T = new DenseMatrix64F(1, Data.D);
+        CommonOps.transpose(x_minus_mu, x_minus_mu_T);
+        DenseMatrix64F mul = new DenseMatrix64F(1, 1);
+        CommonOps.mult(x_minus_mu_T, x_minus_mu, mul);
+        double val = mul.get(0, 0);
+        logprob = Gamma.logGamma((nu + Data.D)/2) - (Gamma.logGamma(nu/2) + Data.D/2 * (Math.log(nu)+Math.log(Math.PI)) + log_determinants.get(k) + (nu + Data.D) / 2 * Math.log(1+val/nu));
         return logprob;
     }
 
+    void init_run()
+    {
+        VoseAlias temp = new VoseAlias();
+        temp.init(n_topics);
+        //temp.init_temp();
+        for (int j = 0; j < Data.n_tuples; j++)
+        {
+            double max = Double.NEGATIVE_INFINITY;
+            for(int k = 0; k < n_topics; k++)
+            {
+                double log_likelihood = log_multivariate_t_density(data_vectors[j], k);
+                //posterior.add(logLikelihood);
+                temp.w[k] = log_likelihood;
+                if (log_likelihood > max)
+                    max = log_likelihood;
+            }
+            //to prevent overflow, subtract by log(p_max). This is because when we will be normalizing after exponentiating, each entry will be exp(log p_i - log p_max )/\Sigma_i exp(log p_i - log p_max)
+            //the log p_max cancels put and prevents overflow in the exponentiating phase.
+            temp.wsum = 0.0;
+            for(int k = 0; k < n_topics; k++)
+            {
+                double p = temp.w[k];
+                p = p - max;
+                double expP = Math.exp(p);
+                temp.wsum += expP;
+                temp.w[k] = expP;
+            }
+            temp.generateTable();
+            q[j].copy(temp);
+        }
+
+    }
 
 }
