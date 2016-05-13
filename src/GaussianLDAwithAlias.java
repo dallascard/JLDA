@@ -192,8 +192,6 @@ class GaussianLDAwithAliasSampler {
     // have the constructor read in the data
     public GaussianLDAwithAliasSampler(String input_dir, int dx) throws Exception {
 
-        Data.D = dx;
-
         Path tuple_vocab_file = Paths.get(input_dir, "tuple_vocab.json");
         Path tuple_entity_file = Paths.get(input_dir, "tuple_entity.json");
         Path tuple_role_file = Paths.get(input_dir, "tuple_role.json");
@@ -235,6 +233,9 @@ class GaussianLDAwithAliasSampler {
         System.out.println("n_head_words=" + n_head_words);
         assert n_tuples == tuple_vectors_json.size();
         System.out.println("vector size=" + Data.D);
+
+        Data.D = dx;
+        Data.n_tuples = n_tuples;
 
         // transfer entity to document mapping from json to array, and count the number of documents
         n_docs = 0;
