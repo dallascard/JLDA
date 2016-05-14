@@ -660,7 +660,7 @@ class GaussianLDASampler {
                 for(int k = 0; k < n_topics; k++)
                 {
                     double count = persona_role_topic_counts[p_j][r_j][k] + beta;
-                    double logLikelihood = log_multivariate_t_density(data_vectors[z_j], k);
+                    double logLikelihood = log_multivariate_t_density(data_vectors[j], k);
                     //add log prior in the posterior vector
                     double logPosterior = Math.log(count) + logLikelihood;
                     posterior.add(logPosterior);
@@ -860,12 +860,23 @@ class GaussianLDASampler {
             for (int v=0; v < head_word_vocab_size; v++) {
                 file.write(head_word_vocab[v] + ',');
                 for (int p=0; p < n_personas; p++) {
-                    file.write(persona_head_word_counts[p][v] + ",");
+                    file.write(t_persona_head_word_counts[p][v] + ",");
                 }
                 file.write("\n");
             }
         }
 
+
+        output_file = Paths.get(outputDir, "document_persona.csv");
+        try (FileWriter file = new FileWriter(output_file.toString())) {
+            for (int d=0; d < n_docs; d++) {
+                file.write(docs[d] + ',');
+                for (int p=0; p < n_personas; p++) {
+                    file.write(t_document_persona_counts[d][p] + ",");
+                }
+                file.write("\n");
+            }
+        }
         /*
         output_file = Paths.get(outputDir, "persona_head_phrase_counts.csv");
         try (FileWriter file = new FileWriter(output_file.toString())) {

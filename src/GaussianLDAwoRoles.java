@@ -1,28 +1,117 @@
-import cern.jet.stat.tdouble.Gamma;
+
+/*
+The Gaussian LDA part of this was draws heavily on the Gaussian LDA implementation at: https://github.com/rajarshd/Gaussian_LDA.git
+which accompanies the paper "Gaussian LDA for Topic Models with Word Embeddings"
+Citation:
+@InProceedings{das-zaheer-dyer:2015,
+  author    = {Das, Rajarshi  and  Zaheer, Manzil  and  Dyer, Chris},
+  title     = {Gaussian LDA for Topic Models with Word Embeddings},
+  booktitle = {Proceedings of the 53rd Annual Meeting of the Association for Computational Linguistics and the 7th International Joint Conference on Natural Language Processing (Volume 1: Long Papers)},
+  publisher = {Association for Computational Linguistics},
+  url       = {http://www.aclweb.org/anthology/P15-1077}
+}
+*/
+
+// note: I imported some of the Cholesky and Aliasing stuff into here, but not using it; see GaussianLDAwithAlias
+
+import java.io.FileReader;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.io.FileWriter;
+import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
+import java.io.BufferedWriter;
+
 import org.json.simple.JSONArray;
 import org.json.simple.parser.JSONParser;
-import java.io.FileReader;
-import java.io.FileWriter;
-import java.nio.file.Paths;
-import java.util.*;
-import java.util.concurrent.ThreadLocalRandom;
-import java.nio.file.Path;
 
-import cern.colt.matrix.tdouble.DoubleMatrix1D;
-import cern.colt.matrix.tdouble.DoubleMatrix2D;
-import cern.colt.matrix.tdouble.impl.DenseDoubleMatrix1D;
-import cern.colt.matrix.tdouble.impl.DenseDoubleMatrix2D;
+import org.ejml.data.DenseMatrix64F;
+import org.ejml.ops.CommonOps;
+import org.ejml.interfaces.linsol.LinearSolver;
+import org.ejml.factory.LinearSolverFactory;
+import org.ejml.factory.DecompositionFactory;
+import org.ejml.interfaces.decomposition.CholeskyDecomposition;
+
+import org.apache.commons.math3.special.Gamma;
 
 
+public class GaussianLDAwoRoles {
 
-class ERLDASampler {
+    public static void main(String args[]) throws Exception {
+
+        HashMap<String, String> params = new HashMap<>();
+
+        // set defaults
+        params.put("-d", "");  // input dir
+        params.put("-o", "");  // output dir
+        params.put("-p", "25");                     // n_personas
+        params.put("-k", "25");                     // n_topics
+        params.put("-a", "1");                      // alpha
+        params.put("-b", "1");                      // beta
+        params.put("-i", "3000");                    // n_iter
+        params.put("-u", "1000");                     // burn_in
+        params.put("-s", "25");                      // subsampling
+        params.put("-w", "10.0");                      // subsampling
+        params.put("-v", "10");                      // word vector dimension
+
+
+        String arg = null;
+        for (String s: args) {
+            if (arg == null)
+                arg = s;
+            else {
+                params.put(arg, s);
+                arg = null;
+            }
+        }
+
+        if (params.get("-d").equals("")) {
+            System.out.println(params);
+            System.exit(0);
+        }
+
+        if (params.get("-o").equals("")) {
+            System.out.println(params);
+            System.exit(0);
+        }
+
+        System.out.println(params);
+
+        String input_dir = params.get("-d");
+        String output_dir = params.get("-o");
+
+        double alpha = Double.parseDouble(params.get("-a"));
+        double beta = Double.parseDouble(params.get("-b"));
+        int n_topics = Integer.parseInt(params.get("-k"));
+        int n_personas = Integer.parseInt(params.get("-p"));
+
+        int n_iter = Integer.parseInt(params.get("-i"));
+        int burn_in = Integer.parseInt(params.get("-u"));
+        int subsampling = Integer.parseInt(params.get("-s"));
+        double slice_width = Double.parseDouble(params.get("-w"));
+
+        int vec_size = Integer.parseInt(params.get("-v"));
+
+        //ELDASampler sampler = new ELDASampler(entity_doc_file, tuple_vocab_file, tuple_entity_file, vocab_file, docs_file);
+        GaussianLDAwoRolesSampler sampler = new GaussianLDAwoRolesSampler(input_dir, vec_size);
+        sampler.initialize(n_personas, n_topics);
+        sampler.run(alpha, beta, n_iter, burn_in, subsampling, output_dir, slice_width);
+
+    }
+}
+
+
+class GaussianLDAwoRolesSampler {
     private int vocab_size;
     private int n_tuples;
-    private int n_docs;
+    private int n_docs;     // N
     private int n_entities;
     private int n_roles;
     private int n_personas;
-    private int n_topics;
+    private int n_topics;   // K
 
     private int head_word_vocab_size;
     private int n_head_words;
@@ -36,6 +125,40 @@ class ERLDASampler {
     private HashMap<Integer, List<Integer>> entity_tuples;
     private String vocab[];
     private String docs[];
+
+    // ** Gaussian LDA parts **
+    private static NormalInverseWishart prior;
+    // embedding associated with each word of the vocab
+    private static DenseMatrix64F[] data_vectors;
+    // mean vector for each topic
+    private static ArrayList<DenseMatrix64F> topic_means = new ArrayList<DenseMatrix64F>(); // AKA tableMeans
+    // inverse covariance matrices for each topic
+    private static ArrayList<DenseMatrix64F> topic_inverse_covariances = new ArrayList<DenseMatrix64F>();
+    // determinant of covariance matrix for each topic
+    private static ArrayList<Double> determinants = new ArrayList<Double>();
+    // stores the sum of the vectors of customers at a given table
+    private static ArrayList<DenseMatrix64F> sum_topic_vectors = new ArrayList<DenseMatrix64F>();
+    // stores the squared sum of the vectors of customers at a given table
+    private static ArrayList<DenseMatrix64F> sum_squared_topic_vectors = new ArrayList<DenseMatrix64F>();
+
+    // variables for doing Cholesky stuff
+    private static ArrayList<DenseMatrix64F> topic_cholesky_l_triangular_mat = new ArrayList<DenseMatrix64F>();
+    private static ArrayList<Double> log_determinants= new ArrayList<Double>();
+    private static CholeskyDecomposition<DenseMatrix64F> decomposer = DecompositionFactory.chol(Data.D, true);
+    private static DenseMatrix64F chol_sigma_0;
+
+    // variables for aliasing stuff
+    private static VoseAlias[] q ;
+    public static  boolean done = false;
+    private static int MH_STEPS = 2;
+
+
+    // caching variable for calculating topic parameters
+    private static DenseMatrix64F k0mu0mu0T = null;
+
+    // linear solver
+    private LinearSolver<DenseMatrix64F> newSolver;
+
 
     private int head_vocab_list[];
     private int head_entity_list[];
@@ -54,22 +177,32 @@ class ERLDASampler {
     private int document_persona_totals[];
     private int topic_vocab_counts[][];
     private int persona_role_topic_counts[][][];
+    private int persona_topic_counts[][];
     private int persona_role_counts[][];
+    private int persona_counts[];
     private int topic_tuple_counts[];
     private int persona_role_vocab_counts[][][];
-
+    private int persona_head_word_counts[][];
 
     private int t_document_persona_counts[][];
     private int t_persona_role_topic_counts[][][];
+    private int t_persona_topic_counts[][];
     private int t_topic_vocab_counts[][];
     private int t_persona_role_counts[][];
+    private int t_persona_counts[];
     private int t_topic_tuple_counts[];
     private int t_persona_role_vocab_counts[][][];
     private int t_entity_persona_counts[][];
     private int t_persona_head_word_counts[][];
     //private int t_persona_head_phrase_counts[][];
 
-    public ERLDASampler(String input_dir) throws Exception {
+    private static BufferedWriter runLogger = null;
+    private static BufferedWriter perplexities = null;
+
+    // have the constructor read in the data
+    public GaussianLDAwoRolesSampler(String input_dir, int dx) throws Exception {
+
+        Data.D = dx;
 
         Path tuple_vocab_file = Paths.get(input_dir, "tuple_vocab.json");
         Path tuple_entity_file = Paths.get(input_dir, "tuple_entity.json");
@@ -77,6 +210,7 @@ class ERLDASampler {
         Path entity_doc_file = Paths.get(input_dir, "entity_doc.json");
         Path vocab_file = Paths.get(input_dir, "vocab.json");
         Path docs_file = Paths.get(input_dir, "docs.json");
+        Path vectors_file = Paths.get(input_dir, "tuple_vectors.json");
 
         Path head_vocab_file = Paths.get(input_dir, "head_word_vocab_list.json");
         Path head_entity_file = Paths.get(input_dir, "head_word_entity_list.json");
@@ -96,6 +230,8 @@ class ERLDASampler {
         JSONArray head_vocab_json = (JSONArray) parser.parse(new FileReader(head_vocab_file.toString()));
         JSONArray head_entity_json = (JSONArray) parser.parse(new FileReader(head_entity_file.toString()));
         JSONArray head_word_vocab_json = (JSONArray) parser.parse(new FileReader(head_word_vocab_file.toString()));
+        JSONArray tuple_vectors_json = (JSONArray) parser.parse(new FileReader(vectors_file.toString()));
+
         //JSONArray head_phrase_vocab_json = (JSONArray) parser.parse(new FileReader(head_phrase_vocab_file.toString()));
         //JSONArray head_phrase_entity_json = (JSONArray) parser.parse(new FileReader(head_phrase_entity_file.toString()));
         //JSONArray head_phrase_full_vocab_json = (JSONArray) parser.parse(new FileReader(head_phrase_full_vocab_file.toString()));
@@ -107,9 +243,8 @@ class ERLDASampler {
         System.out.println("n_entities=" + n_entities);
         n_head_words = head_vocab_json.size();
         System.out.println("n_head_words=" + n_head_words);
-        //n_head_phrases = head_phrase_vocab_json.size();
-        //System.out.println("n_head_phrases=" + n_head_phrases);
-
+        assert n_tuples == tuple_vectors_json.size();
+        System.out.println("vector size=" + Data.D);
 
         // transfer entity to document mapping from json to array, and count the number of documents
         n_docs = 0;
@@ -128,6 +263,7 @@ class ERLDASampler {
         tuple_vocab = new int[n_tuples];
         tuple_entity = new int[n_tuples];
         tuple_role = new int[n_tuples];
+        DenseMatrix64F vector_matrix = new DenseMatrix64F(n_tuples, Data.D);  // initialize the vector matrix
         // also record all the tuples associated with each entity
         entity_tuples = new HashMap<>();
 
@@ -135,6 +271,11 @@ class ERLDASampler {
             tuple_vocab[i] = ((Long) tuple_vocab_json.get(i)).intValue();
             tuple_entity[i] = ((Long) tuple_entity_json.get(i)).intValue();
             tuple_role[i] = ((Long) tuple_role_json.get(i)).intValue();
+
+            JSONArray vector = (JSONArray) tuple_vectors_json.get(i);
+            for (int m = 0; m < Data.D; m++) {
+                vector_matrix.set(i, m, (double) vector.get(m));
+            }
             if (tuple_vocab[i] > vocab_size) {
                 vocab_size = tuple_vocab[i];
             }
@@ -154,8 +295,12 @@ class ERLDASampler {
                 tuples.add(i);
                 entity_tuples.put(tuple_entity[i], tuples);
             }
-
         }
+
+        data_vectors = new DenseMatrix64F[n_tuples]; //splitting into vectors
+        CommonOps.rowsToVector(vector_matrix, data_vectors);
+        System.out.println(data_vectors[0]);
+
         vocab_size += 1;  // one larger than largest index
         n_roles += 1;
 
@@ -172,11 +317,6 @@ class ERLDASampler {
         head_vocab_list = new int[n_head_words];
         head_entity_list = new int[n_head_words];
         entity_head_words = new HashMap<>();
-
-        //head_phrase_vocab_list = new int[n_head_phrases];
-        //head_phrase_entity_list = new int[n_head_phrases];
-        //entity_head_phrases = new HashMap<>();
-
 
         head_word_vocab_size = 0;
         for (int i = 0; i < n_head_words; i++) {
@@ -200,42 +340,10 @@ class ERLDASampler {
             head_word_vocab[i] = (String) head_word_vocab_json.get(i);
         }
 
-        /*
-        head_phrase_vocab_size = 0;
-        for (int i = 0; i < n_head_phrases; i++) {
-            head_phrase_vocab_list[i] = ((Long) head_phrase_vocab_json.get(i)).intValue();
-            head_phrase_entity_list[i] = ((Long) head_phrase_entity_json.get(i)).intValue();
-            if (entity_head_phrases.get(head_phrase_entity_list[i]) == null) {
-                List<Integer> head_phrases = new ArrayList<>();
-                head_phrases.add(i);
-                entity_head_phrases.put(head_phrase_entity_list[i], head_phrases);
-            }
-            else {
-                List<Integer> head_phrases = entity_head_phrases.get(head_phrase_entity_list[i]);
-                head_phrases.add(i);
-                entity_head_phrases.put(head_phrase_entity_list[i], head_phrases);
-            }
-        }
-        head_phrase_vocab_size = head_phrase_full_vocab_json.size();
-
-        head_phrase_vocab = new String[head_phrase_vocab_size];
-        for (int i = 0; i < head_phrase_vocab_size; i++) {
-            head_phrase_vocab[i] = (String) head_phrase_full_vocab_json.get(i);
-        }
-        */
-
-        System.out.println("number of documents=" + n_docs);
-        System.out.println("number of tuples=" + n_tuples);
-        System.out.println("number of roles=" + n_roles);
-        System.out.println("vocab size=" + vocab_size);
-
     }
 
-    public String[] get_vocab() {
-        return vocab;
-    }
 
-    public int[][][] run(int n_personas, int n_topics, double alpha, double beta, double gamma, int n_iter, int burn_in, int subsampling, String outputDir, double slice_width) throws Exception {
+    void initialize(int n_personas, int n_topics) {
 
         this.n_personas = n_personas;
         this.n_topics = n_topics;
@@ -247,26 +355,90 @@ class ERLDASampler {
         document_persona_counts = new int[n_docs][n_personas];
         document_persona_totals = new int[n_docs];
         persona_role_topic_counts = new int[n_personas][n_roles][n_topics];
+        persona_topic_counts = new int[n_personas][n_topics];
         topic_vocab_counts = new int[n_topics][vocab_size];
         persona_role_counts = new int[n_personas][n_roles];
+        persona_counts = new int[n_personas];
         topic_tuple_counts = new int[n_topics];
         persona_role_vocab_counts = new int[n_personas][n_roles][vocab_size];
 
-        int [][] persona_head_word_counts = new int[n_personas][head_word_vocab_size];
+        persona_head_word_counts = new int[n_personas][head_word_vocab_size];
         //int [][] persona_head_phrase_counts = new int[n_personas][head_phrase_vocab_size];
 
         t_document_persona_counts = new int[n_docs][n_personas];
         t_persona_role_topic_counts = new int[n_personas][n_roles][n_topics];
+        t_persona_topic_counts = new int[n_personas][n_topics];
         t_topic_vocab_counts = new int[n_topics][vocab_size];
         t_persona_role_counts = new int[n_personas][n_roles];
+        t_persona_counts = new int[n_personas];
         t_topic_tuple_counts = new int[n_topics];
         t_persona_role_vocab_counts = new int[n_personas][n_roles][vocab_size];
         t_entity_persona_counts = new int[n_entities][n_personas];
-        t_persona_head_word_counts= new int[n_personas][head_word_vocab_size];
+        t_persona_head_word_counts = new int[n_personas][head_word_vocab_size];
         //t_persona_head_phrase_counts= new int[n_personas][head_phrase_vocab_size];
 
-        // do random initalization
-        for (int e=0; e < n_entities; e++) {
+        // ** Gaussian LDA part of setup **
+        prior = new NormalInverseWishart();
+
+        prior.mu_0 = Util.getSampleMean(data_vectors);
+        prior.nu_0 = Data.D; //initializing to the dimension
+        prior.sigma_0 = CommonOps.identity(Data.D); //setting as the identity matrix
+        CommonOps.scale(3 * Data.D, prior.sigma_0);
+        prior.k_0 = 0.1;
+
+        chol_sigma_0 = new DenseMatrix64F(Data.D, Data.D);
+        CommonOps.addEquals(chol_sigma_0, prior.sigma_0);
+        if (!decomposer.decompose(chol_sigma_0))  //cholesky decomp
+        {
+            System.out.println("Matrix could not be Cholesky decomposed");
+            System.exit(1);
+        }
+
+        if (prior.nu_0 < (double) Data.D) {
+            System.out.println("The initial degrees of freedom of the prior is less than the dimension!. Setting it to the number of dimension: " + Data.D);
+            prior.nu_0 = Data.D;
+        }
+
+        double scaleTdistrn = (prior.k_0+1) / (double)(prior.k_0 * (prior.nu_0 - Data.D + 1));
+
+        double degOfFreedom = prior.nu_0 - Data.D + 1;
+        //Now calculate the covariance matrix of the multivariate T-distribution
+        double coeff = (double) (prior.k_0 + 1) / (prior.k_0 * (degOfFreedom));
+        DenseMatrix64F sigma_T = new DenseMatrix64F(Data.D, Data.D);
+        CommonOps.scale(coeff, prior.sigma_0, sigma_T);
+
+        newSolver = LinearSolverFactory.general(Data.D, Data.D);
+        LinearSolver<DenseMatrix64F> solver = LinearSolverFactory.symmPosDef(Data.D);
+        if (!solver.setA(sigma_T))
+            throw new RuntimeException("Invert failed");
+        DenseMatrix64F sigma_TInv = new DenseMatrix64F(Data.D, Data.D);
+        solver.invert(sigma_TInv);
+
+        double sigmaTDet = CommonOps.det(sigma_T);
+
+        // initialize all of our computational shortcuts to zeros
+        for (int k = 0; k < n_topics; k++) {
+            DenseMatrix64F zero = new DenseMatrix64F(Data.D, 1);
+            sum_topic_vectors.add(zero);
+            zero = new DenseMatrix64F(Data.D, Data.D);
+            sum_squared_topic_vectors.add(zero);
+            zero = new DenseMatrix64F(Data.D, Data.D);
+            topic_inverse_covariances.add(zero);
+            determinants.add(0.0);
+            zero = new DenseMatrix64F(Data.D, 1);
+            topic_means.add(zero);
+        }
+
+        // set up Aliasing stuff
+        q = new VoseAlias[Data.n_tuples];
+        for (int j = 0; j < Data.n_tuples; j++)
+        {
+            q[j] = new VoseAlias();
+            q[j].init(n_topics);
+        }
+
+        // randomly assign entities to personas
+        for (int e = 0; e < n_entities; e++) {
             int d_e = entity_doc[e];
             int p = ThreadLocalRandom.current().nextInt(0, n_personas);
             entity_personas[e] = p;
@@ -276,7 +448,8 @@ class ERLDASampler {
 
         System.out.println(n_entities + " entities");
 
-        for (int j=0; j < n_tuples; j++) {
+        // randomly assign tuples to topics
+        for (int j = 0; j < n_tuples; j++) {
             int v_j = tuple_vocab[j];
             int e_j = tuple_entity[j];
             int r_j = tuple_role[j];
@@ -285,26 +458,29 @@ class ERLDASampler {
 
             tuple_topics[j] = k;
             persona_role_topic_counts[p_j][r_j][k] += 1;
+            persona_topic_counts[p_j][k] += 1;
             topic_vocab_counts[k][v_j] += 1;
             persona_role_counts[p_j][r_j] += 1;
+            persona_counts[p_j] += 1;
             topic_tuple_counts[k] += 1;
             persona_role_vocab_counts[p_j][r_j][v_j] += 1;
+
+            // update sum and squard sum trackers
+            DenseMatrix64F sum = sum_topic_vectors.get(k);
+            CommonOps.add(data_vectors[j], sum, sum);
+            DenseMatrix64F sum_squared = sum_squared_topic_vectors.get(k);
+            DenseMatrix64F tuple_vector_transpose = new DenseMatrix64F(1, Data.D);
+            DenseMatrix64F square_vector = new DenseMatrix64F(Data.D, Data.D);
+            tuple_vector_transpose = CommonOps.transpose(data_vectors[j], tuple_vector_transpose);
+            //Multiply x_ix_i^T and add it to the sum_squared for this topic
+            CommonOps.mult(data_vectors[j], tuple_vector_transpose, square_vector);
+            CommonOps.add(sum_squared, square_vector, sum_squared);
         }
 
         System.out.println(n_tuples + " tuples");
 
-        // Determine random orders in which to visit the entities and tuples
-        List<Integer> entity_order = new ArrayList<>();
-        for (int i = 0; i < n_entities; i++) {
-            entity_order.add(i);
-        }
-
-        List<Integer> tuple_order = new ArrayList<>();
-        for (int i = 0; i < n_tuples; i++) {
-            tuple_order.add(i);
-        }
-
-        for (int j=0; j < n_head_words; j++) {
+        // store the head words for later interpretability, even though we're not using them here
+        for (int j = 0; j < n_head_words; j++) {
             int e_j = head_entity_list[j];
             int v_j = head_vocab_list[j];
             int p_j = entity_personas[e_j];
@@ -320,6 +496,41 @@ class ERLDASampler {
         }
         */
 
+        // compute initial topic parameters for each topic
+        for (int k = 0; k < n_topics; k++) {
+            calculate_topic_params(k);
+        }
+
+        //double check again
+        for (int k = 0; k < n_topics; k++) {
+            if (topic_tuple_counts[k] == 0) {
+                System.out.println("Still some tables are empty....exiting!");
+                System.exit(1);
+            }
+        }
+
+        System.out.println("number of documents=" + n_docs);
+        System.out.println("number of tuples=" + n_tuples);
+        System.out.println("number of roles=" + n_roles);
+        System.out.println("vocab size=" + vocab_size);
+
+        System.out.println("Initialization complete");
+
+    }
+
+    public int[][][] run(double alpha, double beta, int n_iter, int burn_in, int subsampling, String outputDir, double slice_width) throws Exception {
+
+        // Determine random orders in which to visit the entities and tuples
+        List<Integer> entity_order = new ArrayList<>();
+        for (int i = 0; i < n_entities; i++) {
+            entity_order.add(i);
+        }
+
+        List<Integer> tuple_order = new ArrayList<>();
+        for (int i = 0; i < n_tuples; i++) {
+            tuple_order.add(i);
+        }
+
         // start sampling
         System.out.println("Doing burn-in");
         for (int i=0; i < n_iter; i++) {
@@ -329,8 +540,7 @@ class ERLDASampler {
                 if ((i < 500) | (i % 100 == 0)) {
                     alpha = slice_sample_alpha(alpha, slice_width);
                     beta = slice_sample_beta(beta, slice_width);
-                    gamma = slice_sample_gamma(gamma, slice_width);
-                    System.out.println("alpha=" + alpha + "; beta=" + beta + "; gamma=" + gamma);
+                    System.out.println("alpha=" + alpha + "; beta=" + beta);
 
                 }
             }
@@ -353,14 +563,17 @@ class ERLDASampler {
                     int role_t = tuple_role[t];
 
                     persona_role_topic_counts[p_e][role_t][topic_t] -= 1;
+                    persona_topic_counts[p_e][topic_t] -= 1;
                     persona_role_counts[p_e][role_t] -= 1;
+                    persona_counts[p_e] -= 1;
                 }
                 for (int t : tuples) {
                     int topic_t = tuple_topics[t];
                     int role_t = tuple_role[t];
 
                     for (int p = 0; p < n_personas; p++) {
-                        pr[p] += Math.log(persona_role_topic_counts[p][role_t][topic_t] + beta) - Math.log(persona_role_counts[p][role_t] + beta * n_topics);
+                        //pr[p] += Math.log(persona_role_topic_counts[p][role_t][topic_t] + beta) - Math.log(persona_role_counts[p][role_t] + beta * n_topics);
+                        pr[p] += Math.log(persona_topic_counts[p][topic_t] + beta) - Math.log(persona_counts[p] + beta * n_topics);
                     }
                 }
                 for (int t : tuples) {
@@ -368,7 +581,9 @@ class ERLDASampler {
                     int role_t = tuple_role[t];
                     // add the subtracted counts back in so that they don't affect the next tuple
                     persona_role_topic_counts[p_e][role_t][topic_t] += 1;
+                    persona_topic_counts[p_e][topic_t] += 1;
                     persona_role_counts[p_e][role_t] += 1;
+                    persona_counts[p_e] += 1;
                 }
 
                 double p_sum = 0;
@@ -395,15 +610,21 @@ class ERLDASampler {
                     int topic_t = tuple_topics[t];
                     int role_t = tuple_role[t];
                     // transfer the persona topic counts to the new persona
-                    persona_role_topic_counts[p_e][role_t][topic_t] -= 1;
-                    persona_role_counts[p_e][role_t] -= 1;
-                    persona_role_topic_counts[p][role_t][topic_t] += 1;
-                    persona_role_counts[p][role_t] += 1;
+                    if (p_e != p) {
+                        persona_role_topic_counts[p_e][role_t][topic_t] -= 1;
+                        persona_topic_counts[p_e][topic_t] -= 1;
+                        persona_role_counts[p_e][role_t] -= 1;
+                        persona_counts[p_e] -= 1;
+                        persona_role_topic_counts[p][role_t][topic_t] += 1;
+                        persona_topic_counts[p][topic_t] += 1;
+                        persona_role_counts[p][role_t] += 1;
+                        persona_counts[p] += 1;
 
-                    // update counts of words assoicated with each persona
-                    int v_t = tuple_vocab[t];
-                    persona_role_vocab_counts[p_e][role_t][v_t] -= 1;
-                    persona_role_vocab_counts[p][role_t][v_t] += 1;
+                        // update counts of words assoicated with each persona
+                        int v_t = tuple_vocab[t];
+                        persona_role_vocab_counts[p_e][role_t][v_t] -= 1;
+                        persona_role_vocab_counts[p][role_t][v_t] += 1;
+                    }
                 }
                 List<Integer> head_words = entity_head_words.get(e);
                 for (int t : head_words) {
@@ -433,14 +654,63 @@ class ERLDASampler {
 
                 // remove the counts for this word
                 persona_role_topic_counts[p_j][r_j][z_j] -= 1;
+                persona_topic_counts[p_j][z_j] -= 1;
                 topic_vocab_counts[z_j][v_j] -= 1;
                 topic_tuple_counts[z_j] -= 1;
 
+                // subtract the vector for this tuple from the corresponding topic sum and sum squared counters
+                DenseMatrix64F topic_vector_transpose = new DenseMatrix64F(1, Data.D);
+                topic_vector_transpose = CommonOps.transpose(data_vectors[j], topic_vector_transpose);
+                DenseMatrix64F squared_vector = new DenseMatrix64F(Data.D, Data.D);
+                CommonOps.mult(data_vectors[j], topic_vector_transpose, squared_vector);
+
+                DenseMatrix64F old_topic_sum = sum_topic_vectors.get(z_j);
+                DenseMatrix64F old_topic_sum_squared = sum_squared_topic_vectors.get(z_j);
+                DenseMatrix64F new_topic_sum = new DenseMatrix64F(Data.D, 1);
+                CommonOps.sub(old_topic_sum, data_vectors[j], new_topic_sum); //subtracting the vector of this customer.
+                sum_topic_vectors.set(z_j, new_topic_sum);
+
+                DenseMatrix64F new_topic_sum_squared = new DenseMatrix64F(Data.D, Data.D);
+                CommonOps.sub(old_topic_sum_squared, squared_vector, new_topic_sum_squared);
+                sum_squared_topic_vectors.set(z_j, new_topic_sum_squared);
+
+                // now recalculate topic parameters
+                calculate_topic_params(z_j);
+
+                ArrayList<Double> posterior = new ArrayList<>();
+                Double max = Double.NEGATIVE_INFINITY;
+                //go over each topic
+                for(int k = 0; k < n_topics; k++)
+                {
+                    //double count = persona_role_topic_counts[p_j][r_j][k] + beta;
+                    double count = persona_topic_counts[p_j][k] + beta;
+                    double logLikelihood = log_multivariate_t_density(data_vectors[j], k);
+                    //add log prior in the posterior vector
+                    double logPosterior = Math.log(count) + logLikelihood;
+                    posterior.add(logPosterior);
+                    if(logPosterior > max)
+                        max = logPosterior;
+                }
+                //to prevent overflow, subtract by log(p_max). This is because when we will be normalizing after exponentiating, each entry will be exp(log p_i - log p_max )/\Sigma_i exp(log p_i - log p_max)
+                //the log p_max cancels put and prevents overflow in the exponentiating phase.
+                for(int k = 0 ; k < n_topics; k++)
+                {
+                    double p = posterior.get(k);
+                    p = p - max;
+                    double expP = Math.exp(p);
+                    posterior.set(k, expP);
+                }
+
+                //now sample a topic from this posterior vector. The sample method will normalize the vector
+                //so no need to normalize now.
+                int k = Util.sample(posterior);
+
+                /*
+                // OLD METHOD pre-Guassian
                 // compute probabilities
                 double p_sum = 0;
                 for (int k = 0; k < n_topics; k++) {
                     pr[k] = (persona_role_topic_counts[p_j][r_j][k] + beta) * (topic_vocab_counts[k][v_j] + gamma) / (topic_tuple_counts[k] + gamma * vocab_size);
-                    //pr[k] = (topic_vocab_counts[k][v_j] + gamma) / (topic_tuple_counts[k] + gamma * vocab_size);
                     assert pr[k] > 0;
                     p_sum += pr[k];
                 }
@@ -453,11 +723,23 @@ class ERLDASampler {
                     k += 1;
                     temp += pr[k];
                 }
+                */
 
+                // update assignments and counts
                 tuple_topics[j] = k;
                 persona_role_topic_counts[p_j][r_j][k] += 1;
+                persona_topic_counts[p_j][k] += 1;
                 topic_vocab_counts[k][v_j] += 1;
                 topic_tuple_counts[k] += 1;
+
+                // update sum and sum squared trackers
+                DenseMatrix64F sum = sum_topic_vectors.get(k);
+                CommonOps.add(data_vectors[j], sum, sum);
+
+                DenseMatrix64F sum_squared = sum_squared_topic_vectors.get(k);
+                CommonOps.add(sum_squared, squared_vector, sum_squared);
+
+                calculate_topic_params(k); //update the table params.
 
             }
 
@@ -466,15 +748,22 @@ class ERLDASampler {
                 if (i % subsampling == 0) {
                     System.out.print("-");
                     for (int p = 0; p < n_personas; p++) {
+                        //t_persona_counts[p] += persona_counts[p];
                         for (int r = 0; r < n_roles; r++) {
-                            t_persona_role_counts[p][r] += persona_role_counts[p][r];
+                            //t_persona_role_counts[p][r] += persona_role_counts[p][r];
+                            /*
                             for (int k = 0; k < n_topics; k++) {
                                 t_persona_role_topic_counts[p][r][k] += persona_role_topic_counts[p][r][k];
                             }
+                            */
                             for (int v = 0; v < vocab_size; v++)
                                 t_persona_role_vocab_counts[p][r][v] += persona_role_vocab_counts[p][r][v];
-
                         }
+                        /*
+                        for (int k = 0; k < n_topics; k++) {
+                            t_persona_topic_counts[p][k] += persona_topic_counts[p][k];
+                        }
+                        */
                         for (int d = 0; d < n_docs; d++) {
                             t_document_persona_counts[d][p] += document_persona_counts[d][p];
                         }
@@ -485,11 +774,13 @@ class ERLDASampler {
                         //    t_persona_head_phrase_counts[p][v] += persona_head_phrase_counts[p][v];
                         //}
                     }
+                    /*
                     for (int k = 0; k < n_topics; k++) {
                         t_topic_tuple_counts[k] += topic_tuple_counts[k];
                         for (int v = 0; v < vocab_size; v++)
                             t_topic_vocab_counts[k][v] += topic_vocab_counts[k][v];
                     }
+                    */
                     for (int e = 0; e < n_entities; e++) {
                         t_entity_persona_counts[e][entity_personas[e]] += 1;
                     }
@@ -561,6 +852,7 @@ class ERLDASampler {
             }
         }
 
+        /*
         output_file = Paths.get(outputDir, "persona_role_topic_counts.csv");
         try (FileWriter file = new FileWriter(output_file.toString())) {
             for (int k=0; k < n_topics; k++) {
@@ -573,6 +865,7 @@ class ERLDASampler {
                 file.write("\n");
             }
         }
+        */
 
         output_file = Paths.get(outputDir, "entity_persona_counts.csv");
         try (FileWriter file = new FileWriter(output_file.toString())) {
@@ -637,31 +930,12 @@ class ERLDASampler {
     }
 
 
-    // compute gamma(start)/gamma(start-steps) without actually computing the gamma functions;
-    // note: gamma(t+1) = t * gamma(t); gamma(2)=gamma(1)=1
-    private double partial_gamma(double start, int steps) {
-        if (start == steps) {
-            return Gamma.gamma(start);
-        }
-        else if (steps > start) {
-            return -1;
-        }
-        else if (steps == 0) {
-            return 1;
-        }
-        else {
-            return partial_gamma(start-1, steps-1) * (start-1);
-        }
-    }
-
     private double calc_log_p_alpha(double alpha) {
         double log_p = Math.log(alpha)  ;
         for (int d=0; d < n_docs; d++) {
             for (int k=0; k < n_personas; k++) {
-                //log_p += Math.log(partial_gamma(alpha + document_persona_counts[d][k], document_persona_counts[d][k]));
                 log_p += Gamma.logGamma(alpha + document_persona_counts[d][k]) - Gamma.logGamma(alpha);
             }
-            //log_p -= Math.log(partial_gamma(n_personas * alpha + document_persona_totals[d], document_persona_totals[d]));
             log_p -= Gamma.logGamma(n_personas * alpha + document_persona_totals[d]) + Gamma.logGamma(n_personas * alpha);
         }
         return log_p;
@@ -701,11 +975,11 @@ class ERLDASampler {
         for (int p=0; p < 1; p++) {
             for (int r=0; r < 1; r++) {
                 for (int k = 0; k < n_topics; k++) {
-                    //log_p += Math.log(partial_gamma(beta + persona_role_topic_counts[p][r][k], persona_role_topic_counts[p][r][k]));
-                    log_p += Gamma.logGamma(beta + persona_role_topic_counts[p][r][k]) - Gamma.logGamma(beta);
+                    //log_p += Gamma.logGamma(beta + persona_role_topic_counts[p][r][k]) - Gamma.logGamma(beta);
+                    log_p += Gamma.logGamma(beta + persona_topic_counts[p][k]) - Gamma.logGamma(beta);
                 }
-                //log_p -= Math.log(partial_gamma(n_topics * beta + persona_role_counts[p][r], persona_role_counts[p][r]));
-                log_p -= Gamma.logGamma(n_topics * beta + persona_role_counts[p][r]) + Gamma.logGamma(n_topics * beta);
+                //log_p -= Gamma.logGamma(n_topics * beta + persona_role_counts[p][r]) + Gamma.logGamma(n_topics * beta);
+                log_p -= Gamma.logGamma(n_topics * beta + persona_counts[p]) + Gamma.logGamma(n_topics * beta);
             }
         }
         return log_p;
@@ -713,7 +987,6 @@ class ERLDASampler {
 
     private double slice_sample_beta(double beta, double slice_width) {
         //System.out.println("Tuning beta");
-        int beta_count = 0;
         double log_p_current_beta = calc_log_p_beta(beta);
         double log_beta = Math.log(beta);
         double u = Math.log(ThreadLocalRandom.current().nextDouble()) + log_p_current_beta;
@@ -741,46 +1014,112 @@ class ERLDASampler {
     }
 
 
-    private double calc_log_p_gamma(double gamma) {
-        double log_p = Math.log(gamma)  ;
-        for (int k=0; k < n_topics; k++) {
-            for (int v=0; v < vocab_size; v++) {
-                //log_p += Math.log(partial_gamma(gamma + topic_vocab_counts[k][v], topic_vocab_counts[k][v]));
-                log_p += Gamma.logGamma(gamma + topic_vocab_counts[k][v]) - Gamma.logGamma(gamma);
-            }
-            //log_p -= Math.log(partial_gamma(vocab_size * gamma+ topic_tuple_counts[k], topic_tuple_counts[k]));l
-            log_p -= Gamma.logGamma(vocab_size * gamma + topic_tuple_counts[k]) + Gamma.logGamma(vocab_size * gamma);
+    /**
+     * Calculate topic parameters (bayesian mean, covariance^-1, determinant etc.) without using Cholesky decopmosition
+     **/
+    private void calculate_topic_params(int k)
+    {
+        int count = topic_tuple_counts[k];
+        double nu_n = prior.nu_0 + count;
+        double k_n = prior.k_0 + count;
+
+        //calculate mu_n
+        DenseMatrix64F mu_n = new DenseMatrix64F(Data.D, 1);
+        CommonOps.scale(prior.k_0, prior.mu_0, mu_n); //k_0 * mu_o
+        //Now add N X_bar
+        CommonOps.add(mu_n, sum_topic_vectors.get(k), mu_n);
+        CommonOps.divide(k_n, mu_n, mu_n); // divide by k_n
+        if(topic_means.size() > k)
+            topic_means.set(k, mu_n);
+        else //for new table
+        {
+            assert k <= topic_means.size();
+            topic_means.add(mu_n);
         }
-        return log_p;
+
+        //we will be using the new update
+        //Sigma_N = Sigma_0 + \sum(y_iy_i^T) - (k_n)\mu_N\mu_N^T + k_0\mu_0\mu_0^T
+        //calculate \mu_N\mu_N^T
+        DenseMatrix64F mu_n_T = new DenseMatrix64F(1, Data.D);
+        mu_n_T = CommonOps.transpose(mu_n, mu_n_T);
+        DenseMatrix64F mu_n_mu_nT = new DenseMatrix64F(Data.D, Data.D);
+        CommonOps.mult(mu_n, mu_n_T, mu_n_mu_nT);
+        CommonOps.scale(k_n, mu_n_mu_nT);
+
+        //cache k_0\mu_0\mu_0^T, only compute it once
+        if(k0mu0mu0T == null)
+        {
+            //compute mu0^T
+            DenseMatrix64F mu0T = new DenseMatrix64F(1, Data.D);
+            mu0T = CommonOps.transpose(prior.mu_0, mu0T);
+            k0mu0mu0T = new DenseMatrix64F(Data.D, Data.D);
+            CommonOps.mult(prior.mu_0, mu0T, k0mu0mu0T);
+            CommonOps.scale(prior.k_0, k0mu0mu0T);
+        }
+        DenseMatrix64F sigmaN = new DenseMatrix64F(Data.D, Data.D);
+        CommonOps.add(prior.sigma_0, sum_squared_topic_vectors.get(k), sigmaN);
+        CommonOps.subEquals(sigmaN, mu_n_mu_nT);
+        CommonOps.add(sigmaN, k0mu0mu0T, sigmaN);
+        double scaleTdistrn = (k_n + 1)/(k_n * (nu_n - Data.D + 1));
+        CommonOps.scale(scaleTdistrn, sigmaN, sigmaN);
+
+        //calculate det(Sigma)
+        double det = CommonOps.det(sigmaN);
+        //System.out.println(det+" "+count);
+        //System.out.println(det);
+        if(k < determinants.size())
+            determinants.set(k, det);
+        else
+            determinants.add(det);
+        //Now calculate Sigma^(-1) and det(Sigma) and store them
+        //calculate Sigma^(-1)
+        if( !newSolver.setA(sigmaN) )
+            throw new RuntimeException("Invert failed");
+
+        DenseMatrix64F sigmaNInv = new DenseMatrix64F(Data.D, Data.D);
+        newSolver.invert(sigmaNInv);
+        if(k < topic_inverse_covariances.size())
+            topic_inverse_covariances.set(k, sigmaNInv);//storing the inverse covariances
+        else
+            topic_inverse_covariances.add(sigmaNInv);
     }
 
-    private double slice_sample_gamma(double gamma, double slice_width) {
-        //System.out.println("Tuning gamma");
-        int gamma_count = 0;
-        double log_p_current_gamma = calc_log_p_gamma(gamma);
-        double log_gamma = Math.log(gamma);
-        double u = Math.log(ThreadLocalRandom.current().nextDouble()) + log_p_current_gamma;
-        //System.out.println("current log p = " + log_p_current_gamma);
-        //System.out.println("Target log p = " + u);
-        double offset = ThreadLocalRandom.current().nextDouble();
-        double left = log_gamma - offset * slice_width;
-        double right = left + slice_width;
-        double new_log_gamma = left + ThreadLocalRandom.current().nextDouble() * (right - left);
-        double log_p_new_gamma = calc_log_p_gamma(Math.exp(new_log_gamma));
-        //System.out.println("Left:" + Math.exp(left) + " Right:" + Math.exp(right) + "; new gamma = " + Math.exp(new_log_gamma) + "; log p = " + log_p_new_gamma);
-        while (log_p_new_gamma < u) {
-            if (new_log_gamma < log_gamma) {
-                left = new_log_gamma;
-            } else {
-                right = new_log_gamma;
-            }
-            new_log_gamma = left + ThreadLocalRandom.current().nextDouble() * (right - left);
-            log_p_new_gamma = calc_log_p_gamma(Math.exp(new_log_gamma));
-            //System.out.println("Left:" + Math.exp(left) + " Right:" + Math.exp(right) + "; new gamma = " + Math.exp(new_log_gamma) + "; log p = " + log_p_new_gamma);
-        }
-        gamma = Math.exp(new_log_gamma);
-        //System.out.println("new gamma = " + gamma);
-        return gamma;
+    /**
+     * @param x data point
+     * @param k topic
+     * @return
+     */
+    //private static double logMultivariateTDensity(DenseMatrix64F x, DenseMatrix64F mu, DenseMatrix64F sigmaInv,double det, double nu)
+    private double log_multivariate_t_density(DenseMatrix64F x, int k)
+    {
+        DenseMatrix64F mu = topic_means.get(k);
+        DenseMatrix64F sigmaInv = topic_inverse_covariances.get(k);
+        double det = determinants.get(k);
+        int count = topic_tuple_counts[k]; //this is the prior
+        //Now calculate the likelihood
+        //calculate degrees of freedom of the T-distribution
+        double nu = prior.nu_0 + count - Data.D + 1;
+        //calculate (x = mu)
+        DenseMatrix64F x_minus_mu = new DenseMatrix64F(Data.D, 1);
+        CommonOps.sub(x, mu, x_minus_mu);
+        //take the transpose
+        DenseMatrix64F x_minus_mu_transpose = new DenseMatrix64F(1, Data.D);
+        x_minus_mu_transpose  = CommonOps.transpose(x_minus_mu, x_minus_mu_transpose );
+        //Calculate (x = mu)^TSigma^(-1)(x = mu)
+        DenseMatrix64F prod = new DenseMatrix64F(1, Data.D);
+        CommonOps.mult(x_minus_mu_transpose, sigmaInv, prod);
+        DenseMatrix64F prod1 = new DenseMatrix64F(1, 1);
+        CommonOps.mult(prod, x_minus_mu, prod1);
+        //Finally get the value in a double.
+        assert prod1.numCols == 1;
+        assert prod1.numRows == 1;
+        double val = prod1.get(0, 0); //prod1 is a 1x1 matrix
+        //System.out.println("val = "+val);
+        //System.out.println("det = "+det);
+        double logprob = 0.0;
+        logprob = Gamma.logGamma((nu + Data.D)/2) - (Gamma.logGamma(nu/2) + Data.D/2 * (Math.log(nu)+Math.log(Math.PI)) + 0.5 * Math.log(det) + (nu + Data.D)/2* Math.log(1+val/nu));
+        return logprob;
     }
+
 
 }
