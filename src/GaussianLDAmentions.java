@@ -271,6 +271,7 @@ class GaussianLDAmentionsSampler {
         n_roles = 0;
         tuple_vocab = new int[n_tuples];
         tuple_role = new int[n_tuples];
+        tuple_mention = new int[n_tuples];
         mention_entity = new int[n_mentions];
         //DenseMatrix64F vector_matrix = new DenseMatrix64F(n_tuples, Data.D);  // initialize the vector matrix
         DenseMatrix64F vector_matrix = new DenseMatrix64F(n_mentions, Data.D);  // initialize the vector matrix
