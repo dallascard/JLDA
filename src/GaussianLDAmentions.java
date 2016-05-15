@@ -412,7 +412,7 @@ class GaussianLDAmentionsSampler {
         prior.nu_0 = Data.D; //initializing to the dimension
         prior.sigma_0 = CommonOps.identity(Data.D); //setting as the identity matrix
         CommonOps.scale(3 * Data.D, prior.sigma_0);
-        prior.k_0 = 0.1;
+        prior.k_0 = 0.01;
 
         /*
         chol_sigma_0 = new DenseMatrix64F(Data.D, Data.D);
