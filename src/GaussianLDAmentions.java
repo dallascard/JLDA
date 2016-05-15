@@ -275,6 +275,7 @@ class GaussianLDAmentionsSampler {
         //DenseMatrix64F vector_matrix = new DenseMatrix64F(n_tuples, Data.D);  // initialize the vector matrix
         DenseMatrix64F vector_matrix = new DenseMatrix64F(n_mentions, Data.D);  // initialize the vector matrix
         // also record all the tuples associated with each entity
+        entity_mentions = new HashMap<>();
         mention_tuples = new HashMap<>();
 
         // feed mention vectors into a matrix
