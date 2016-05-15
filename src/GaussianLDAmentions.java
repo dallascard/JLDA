@@ -799,12 +799,21 @@ class GaussianLDAmentionsSampler {
                     }
                     */
                 }
+
+                if (i % 500 == 0) {
+                    System.out.println("Saving running totals at iteration " + i);
+                    save_running_totals(outputDir);
+                }
+
+
             }
             else if (i % subsampling == 0) {
                 System.out.print(".");
             }
 
         }
+
+        save_running_totals(outputDir);
 
         // return final word-topic matrices
 
@@ -836,111 +845,6 @@ class GaussianLDAmentionsSampler {
             }
             System.out.println("");
         }
-
-        /*
-        for (int p=0; p < n_personas; p++) {
-            System.out.println("** persona " + p + "**");
-            List<Integer> list = new ArrayList<>();
-            for (int k = 0; k < n_personas; k++)
-                list.add(t_persona_topic_counts[p][k]);
-            Collections.sort(list);
-            Collections.reverse(list);
-            int n_to_print = 2;
-            int threshold = list.get(n_to_print);
-            for (int k = 0; k < n_personas; k++) {
-                if (t_persona_topic_counts[p][k] >= threshold)
-                    System.out.println(k + ": " + t_persona_topic_counts[p][k]);
-            }
-            System.out.println("");
-        }
-        */
-
-        Path output_file = Paths.get(outputDir, "topic_vocab_counts.csv");
-        try (FileWriter file = new FileWriter(output_file.toString())) {
-            for (int v=0; v < vocab_size; v++) {
-                file.write(vocab[v] + ",");
-                for (int k=0; k < n_topics; k++) {
-                    file.write(t_topic_vocab_counts[k][v] + ",");
-                }
-                file.write("\n");
-            }
-        }
-
-        /*
-        output_file = Paths.get(outputDir, "persona_role_topic_counts.csv");
-        try (FileWriter file = new FileWriter(output_file.toString())) {
-            for (int k=0; k < n_topics; k++) {
-                file.write(k + ",");
-                for (int p=0; p < n_personas; p++) {
-                    for (int r=0; r < n_roles; r++) {
-                        file.write(t_persona_role_topic_counts[p][r][k] + ",");
-                    }
-                }
-                file.write("\n");
-            }
-        }
-        */
-
-        /*
-        output_file = Paths.get(outputDir, "entity_persona_counts.csv");
-        try (FileWriter file = new FileWriter(output_file.toString())) {
-            for (int e=0; e < n_entities; e++) {
-                file.write(e + ",");
-                for (int p=0; p < n_personas; p++) {
-                    file.write(t_entity_persona_counts[e][p] + ",");
-                }
-                file.write("\n");
-            }
-        }
-        */
-
-        output_file = Paths.get(outputDir, "persona_role_vocab_counts.csv");
-        try (FileWriter file = new FileWriter(output_file.toString())) {
-            for (int r=0; r < n_roles; r++) {
-                for (int v=0; v < vocab_size; v++) {
-                    file.write(r + ":" + vocab[v] + ',');
-                    for (int p=0; p < n_personas; p++) {
-                        file.write(t_persona_role_vocab_counts[p][r][v] + ",");
-                    }
-                    file.write("\n");
-                }
-            }
-        }
-
-        output_file = Paths.get(outputDir, "persona_head_word_counts.csv");
-        try (FileWriter file = new FileWriter(output_file.toString())) {
-            for (int v=0; v < head_word_vocab_size; v++) {
-                file.write(head_word_vocab[v] + ',');
-                for (int p=0; p < n_personas; p++) {
-                    file.write(t_persona_head_word_counts[p][v] + ",");
-                }
-                file.write("\n");
-            }
-        }
-
-        output_file = Paths.get(outputDir, "document_persona.csv");
-        try (FileWriter file = new FileWriter(output_file.toString())) {
-            for (int d=0; d < n_docs; d++) {
-                file.write(docs[d] + ',');
-                for (int p=0; p < n_personas; p++) {
-                    file.write(t_document_persona_counts[d][p] + ",");
-                }
-                file.write("\n");
-            }
-        }
-
-        /*
-        output_file = Paths.get(outputDir, "persona_head_phrase_counts.csv");
-        try (FileWriter file = new FileWriter(output_file.toString())) {
-            for (int v=0; v < head_phrase_vocab_size; v++) {
-                file.write(head_phrase_vocab[v] + ',');
-                for (int p=0; p < n_personas; p++) {
-                    file.write(persona_head_phrase_counts[p][v] + ",");
-                }
-                file.write("\n");
-            }
-        }
-        */
 
         return t_persona_role_vocab_counts;
     }
@@ -1135,6 +1039,115 @@ class GaussianLDAmentionsSampler {
         double logprob = 0.0;
         logprob = Gamma.logGamma((nu + Data.D)/2) - (Gamma.logGamma(nu/2) + Data.D/2 * (Math.log(nu)+Math.log(Math.PI)) + 0.5 * Math.log(det) + (nu + Data.D)/2* Math.log(1+val/nu));
         return logprob;
+    }
+
+    private void save_running_totals(String outputDir) throws Exception {
+
+        /*
+        for (int p=0; p < n_personas; p++) {
+            System.out.println("** persona " + p + "**");
+            List<Integer> list = new ArrayList<>();
+            for (int k = 0; k < n_personas; k++)
+                list.add(t_persona_topic_counts[p][k]);
+            Collections.sort(list);
+            Collections.reverse(list);
+            int n_to_print = 2;
+            int threshold = list.get(n_to_print);
+            for (int k = 0; k < n_personas; k++) {
+                if (t_persona_topic_counts[p][k] >= threshold)
+                    System.out.println(k + ": " + t_persona_topic_counts[p][k]);
+            }
+            System.out.println("");
+        }
+        */
+
+        Path output_file = Paths.get(outputDir, "topic_vocab_counts.csv");
+        try (FileWriter file = new FileWriter(output_file.toString())) {
+            for (int v=0; v < vocab_size; v++) {
+                file.write(vocab[v] + ",");
+                for (int k=0; k < n_topics; k++) {
+                    file.write(t_topic_vocab_counts[k][v] + ",");
+                }
+                file.write("\n");
+            }
+        }
+
+        /*
+        output_file = Paths.get(outputDir, "persona_role_topic_counts.csv");
+        try (FileWriter file = new FileWriter(output_file.toString())) {
+            for (int k=0; k < n_topics; k++) {
+                file.write(k + ",");
+                for (int p=0; p < n_personas; p++) {
+                    for (int r=0; r < n_roles; r++) {
+                        file.write(t_persona_role_topic_counts[p][r][k] + ",");
+                    }
+                }
+                file.write("\n");
+            }
+        }
+        */
+
+        /*
+        output_file = Paths.get(outputDir, "entity_persona_counts.csv");
+        try (FileWriter file = new FileWriter(output_file.toString())) {
+            for (int e=0; e < n_entities; e++) {
+                file.write(e + ",");
+                for (int p=0; p < n_personas; p++) {
+                    file.write(t_entity_persona_counts[e][p] + ",");
+                }
+                file.write("\n");
+            }
+        }
+        */
+
+        output_file = Paths.get(outputDir, "persona_role_vocab_counts.csv");
+        try (FileWriter file = new FileWriter(output_file.toString())) {
+            for (int r=0; r < n_roles; r++) {
+                for (int v=0; v < vocab_size; v++) {
+                    file.write(r + ":" + vocab[v] + ',');
+                    for (int p=0; p < n_personas; p++) {
+                        file.write(t_persona_role_vocab_counts[p][r][v] + ",");
+                    }
+                    file.write("\n");
+                }
+            }
+        }
+
+        output_file = Paths.get(outputDir, "persona_head_word_counts.csv");
+        try (FileWriter file = new FileWriter(output_file.toString())) {
+            for (int v=0; v < head_word_vocab_size; v++) {
+                file.write(head_word_vocab[v] + ',');
+                for (int p=0; p < n_personas; p++) {
+                    file.write(t_persona_head_word_counts[p][v] + ",");
+                }
+                file.write("\n");
+            }
+        }
+
+        output_file = Paths.get(outputDir, "document_persona.csv");
+        try (FileWriter file = new FileWriter(output_file.toString())) {
+            for (int d=0; d < n_docs; d++) {
+                file.write(docs[d] + ',');
+                for (int p=0; p < n_personas; p++) {
+                    file.write(t_document_persona_counts[d][p] + ",");
+                }
+                file.write("\n");
+            }
+        }
+
+        /*
+        output_file = Paths.get(outputDir, "persona_head_phrase_counts.csv");
+        try (FileWriter file = new FileWriter(output_file.toString())) {
+            for (int v=0; v < head_phrase_vocab_size; v++) {
+                file.write(head_phrase_vocab[v] + ',');
+                for (int p=0; p < n_personas; p++) {
+                    file.write(persona_head_phrase_counts[p][v] + ",");
+                }
+                file.write("\n");
+            }
+        }
+        */
+
     }
 
 

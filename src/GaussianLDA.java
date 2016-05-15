@@ -195,7 +195,7 @@ class GaussianLDASampler {
     private static BufferedWriter perplexities = null;
 
     // have the constructor read in the data
-    public GaussianLDASampler(String input_dir, int dx) throws Exception {
+    GaussianLDASampler(String input_dir, int dx) throws Exception {
 
         Data.D = dx;
 
@@ -751,15 +751,21 @@ class GaussianLDASampler {
                         t_entity_persona_counts[e][entity_personas[e]] += 1;
                     }
                 }
+
+                if (i % 500 == 0) {
+                    System.out.println("Saving running totals at iteration " + i);
+                    save_running_totals(outputDir);
+                }
             }
             else if (i % subsampling == 0) {
                 System.out.print(".");
             }
 
         }
+        System.out.println("Saving running totals after final iteration");
+        save_running_totals(outputDir);
 
-        // return final word-topic matrices
-
+        // Display a quick summary
         System.out.println("PERSONA-VOCAB COUNTS");
         for (int p=0; p < n_personas; p++) {
             System.out.println("**" + p + "**");
@@ -788,107 +794,6 @@ class GaussianLDASampler {
             }
             System.out.println("");
         }
-
-        /*
-        for (int p=0; p < n_personas; p++) {
-            System.out.println("** persona " + p + "**");
-            List<Integer> list = new ArrayList<>();
-            for (int k = 0; k < n_personas; k++)
-                list.add(t_persona_topic_counts[p][k]);
-            Collections.sort(list);
-            Collections.reverse(list);
-            int n_to_print = 2;
-            int threshold = list.get(n_to_print);
-            for (int k = 0; k < n_personas; k++) {
-                if (t_persona_topic_counts[p][k] >= threshold)
-                    System.out.println(k + ": " + t_persona_topic_counts[p][k]);
-            }
-            System.out.println("");
-        }
-        */
-
-        Path output_file = Paths.get(outputDir, "topic_vocab_counts.csv");
-        try (FileWriter file = new FileWriter(output_file.toString())) {
-            for (int v=0; v < vocab_size; v++) {
-                file.write(vocab[v] + ",");
-                for (int k=0; k < n_topics; k++) {
-                    file.write(t_topic_vocab_counts[k][v] + ",");
-                }
-                file.write("\n");
-            }
-        }
-
-        output_file = Paths.get(outputDir, "persona_role_topic_counts.csv");
-        try (FileWriter file = new FileWriter(output_file.toString())) {
-            for (int k=0; k < n_topics; k++) {
-                file.write(k + ",");
-                for (int p=0; p < n_personas; p++) {
-                    for (int r=0; r < n_roles; r++) {
-                        file.write(t_persona_role_topic_counts[p][r][k] + ",");
-                    }
-                }
-                file.write("\n");
-            }
-        }
-
-        output_file = Paths.get(outputDir, "entity_persona_counts.csv");
-        try (FileWriter file = new FileWriter(output_file.toString())) {
-            for (int e=0; e < n_entities; e++) {
-                file.write(e + ",");
-                for (int p=0; p < n_personas; p++) {
-                    file.write(t_entity_persona_counts[e][p] + ",");
-                }
-                file.write("\n");
-            }
-        }
-
-        output_file = Paths.get(outputDir, "persona_role_vocab_counts.csv");
-        try (FileWriter file = new FileWriter(output_file.toString())) {
-            for (int r=0; r < n_roles; r++) {
-                for (int v=0; v < vocab_size; v++) {
-                    file.write(r + ":" + vocab[v] + ',');
-                    for (int p=0; p < n_personas; p++) {
-                        file.write(t_persona_role_vocab_counts[p][r][v] + ",");
-                    }
-                    file.write("\n");
-                }
-            }
-        }
-
-        output_file = Paths.get(outputDir, "persona_head_word_counts.csv");
-        try (FileWriter file = new FileWriter(output_file.toString())) {
-            for (int v=0; v < head_word_vocab_size; v++) {
-                file.write(head_word_vocab[v] + ',');
-                for (int p=0; p < n_personas; p++) {
-                    file.write(t_persona_head_word_counts[p][v] + ",");
-                }
-                file.write("\n");
-            }
-        }
-
-
-        output_file = Paths.get(outputDir, "document_persona.csv");
-        try (FileWriter file = new FileWriter(output_file.toString())) {
-            for (int d=0; d < n_docs; d++) {
-                file.write(docs[d] + ',');
-                for (int p=0; p < n_personas; p++) {
-                    file.write(t_document_persona_counts[d][p] + ",");
-                }
-                file.write("\n");
-            }
-        }
-        /*
-        output_file = Paths.get(outputDir, "persona_head_phrase_counts.csv");
-        try (FileWriter file = new FileWriter(output_file.toString())) {
-            for (int v=0; v < head_phrase_vocab_size; v++) {
-                file.write(head_phrase_vocab[v] + ',');
-                for (int p=0; p < n_personas; p++) {
-                    file.write(persona_head_phrase_counts[p][v] + ",");
-                }
-                file.write("\n");
-            }
-        }
-        */
 
         return t_persona_role_vocab_counts;
     }
@@ -1048,72 +953,6 @@ class GaussianLDASampler {
     }
 
 
-    /**
-     * Calculate topic parameters (bayesian mean, covariance^-1, determinant etc.) using Cholesky decopmosition
-     * @param k  (topic)
-     * @param j  (tuple)
-     * @param is_removed
-     */
-    private void update_topic_params(int k, int j, boolean is_removed)
-    {
-        int count = topic_tuple_counts[k];
-        double k_n = prior.k_0 + count;
-        double nu_n = prior.nu_0 + count;
-        double scaleTdistrn = (k_n + 1)/(k_n * (nu_n - Data.D + 1));
-
-        DenseMatrix64F old_l_tri_decomp = topic_cholesky_l_triangular_mat.get(k);
-
-        if (is_removed) {
-            /**
-             * Now use the rank1 downdate to calculate the cholesky decomposition of the updated covariance matrix
-             * the update equaltion is \Sigma_(N+1) =\Sigma_(N) - (k_0 + N+1)/(k_0 + N)(X_{n} - \mu_{n-1})(X_{n} - \mu_{n-1})^T
-             * therefore x = sqrt((k_0 + N - 1)/(k_0 + N)) (X_{n} - \mu_{n})
-             * Note here \mu_n will be the mean before updating. After updating sigma_n, we will update \mu_n.
-             */
-            DenseMatrix64F x = new DenseMatrix64F(Data.D, 1);
-            CommonOps.sub(data_vectors[j], topic_means.get(k), x);  //calculate (X_{n} - \mu_{n-1})
-            double coeff = Math.sqrt((k_n+1) / k_n);
-            CommonOps.scale(coeff, x);
-            Util.cholRank1Downdate(old_l_tri_decomp, x);
-            topic_cholesky_l_triangular_mat.set(k, old_l_tri_decomp);  //the cholRank1Downdate modifies the oldLTriangularDecomp, therefore putting it back to the map
-            //updateMean(tableId);
-            DenseMatrix64F new_mean = new DenseMatrix64F(Data.D, 1);
-            CommonOps.scale(k_n+1, topic_means.get(k), new_mean);
-            CommonOps.subEquals(new_mean, data_vectors[j]);
-            CommonOps.divide(k_n, new_mean);
-            topic_means.set(k, new_mean);
-        }
-        else //new customer is added
-        {
-            DenseMatrix64F new_mean = new DenseMatrix64F(Data.D, 1);
-            CommonOps.scale(k_n-1, topic_means.get(k), new_mean);
-            CommonOps.addEquals(new_mean, data_vectors[j]);
-            CommonOps.divide(k_n, new_mean);
-            topic_means.set(k, new_mean);
-            /**
-             * The rank1 update equation is
-             * \Sigma_{n+1} = \Sigma_{n} + (k_0 + n + 1)/(k_0 + n) * (x_{n+1} - \mu_{n+1})(x_{n+1} - \mu_{n+1})^T
-             */
-            DenseMatrix64F x = new DenseMatrix64F(Data.D, 1);
-            CommonOps.sub(data_vectors[j], topic_means.get(k), x);  //calculate (X_{n} - \mu_{n-1})
-            double coeff = Math.sqrt(k_n/(k_n - 1));
-            CommonOps.scale(coeff, x);
-            Util.cholRank1Update(old_l_tri_decomp, x);
-            topic_cholesky_l_triangular_mat.set(k, old_l_tri_decomp);  //the cholRank1Downdate modifies the oldLTriangularDecomp, therefore putting it back to the map
-        }
-
-        //calculate the 0.5*log(det) + D/2*scaleTdistrn; the scaleTdistrn is because the posterior predictive distribution sends in a scaled value of \Sigma
-        double log_det = 0.0;
-        for(int m = 0; m < Data.D; m++)
-            log_det = log_det + Math.log(old_l_tri_decomp.get(m, m));
-        log_det += Data.D * Math.log(scaleTdistrn) / (double)2;
-
-        if (k < log_determinants.size())
-            log_determinants.set(k, log_det);
-        else
-            log_determinants.add(log_det);
-
-    }
 
     /**
      * @param x data point
@@ -1152,5 +991,109 @@ class GaussianLDASampler {
         return logprob;
     }
 
+
+    private void save_running_totals(String outputDir) throws Exception {
+
+        /*
+        for (int p=0; p < n_personas; p++) {
+            System.out.println("** persona " + p + "**");
+            List<Integer> list = new ArrayList<>();
+            for (int k = 0; k < n_personas; k++)
+                list.add(t_persona_topic_counts[p][k]);
+            Collections.sort(list);
+            Collections.reverse(list);
+            int n_to_print = 2;
+            int threshold = list.get(n_to_print);
+            for (int k = 0; k < n_personas; k++) {
+                if (t_persona_topic_counts[p][k] >= threshold)
+                    System.out.println(k + ": " + t_persona_topic_counts[p][k]);
+            }
+            System.out.println("");
+        }
+        */
+
+        Path output_file = Paths.get(outputDir, "topic_vocab_counts.csv");
+        try (FileWriter file = new FileWriter(output_file.toString())) {
+            for (int v=0; v < vocab_size; v++) {
+                file.write(vocab[v] + ",");
+                for (int k=0; k < n_topics; k++) {
+                    file.write(t_topic_vocab_counts[k][v] + ",");
+                }
+                file.write("\n");
+            }
+        }
+
+        output_file = Paths.get(outputDir, "persona_role_topic_counts.csv");
+        try (FileWriter file = new FileWriter(output_file.toString())) {
+            for (int k=0; k < n_topics; k++) {
+                file.write(k + ",");
+                for (int p=0; p < n_personas; p++) {
+                    for (int r=0; r < n_roles; r++) {
+                        file.write(t_persona_role_topic_counts[p][r][k] + ",");
+                    }
+                }
+                file.write("\n");
+            }
+        }
+
+        output_file = Paths.get(outputDir, "entity_persona_counts.csv");
+        try (FileWriter file = new FileWriter(output_file.toString())) {
+            for (int e=0; e < n_entities; e++) {
+                file.write(e + ",");
+                for (int p=0; p < n_personas; p++) {
+                    file.write(t_entity_persona_counts[e][p] + ",");
+                }
+                file.write("\n");
+            }
+        }
+
+        output_file = Paths.get(outputDir, "persona_role_vocab_counts.csv");
+        try (FileWriter file = new FileWriter(output_file.toString())) {
+            for (int r=0; r < n_roles; r++) {
+                for (int v=0; v < vocab_size; v++) {
+                    file.write(r + ":" + vocab[v] + ',');
+                    for (int p=0; p < n_personas; p++) {
+                        file.write(t_persona_role_vocab_counts[p][r][v] + ",");
+                    }
+                    file.write("\n");
+                }
+            }
+        }
+
+        output_file = Paths.get(outputDir, "persona_head_word_counts.csv");
+        try (FileWriter file = new FileWriter(output_file.toString())) {
+            for (int v=0; v < head_word_vocab_size; v++) {
+                file.write(head_word_vocab[v] + ',');
+                for (int p=0; p < n_personas; p++) {
+                    file.write(t_persona_head_word_counts[p][v] + ",");
+                }
+                file.write("\n");
+            }
+        }
+
+
+        output_file = Paths.get(outputDir, "document_persona.csv");
+        try (FileWriter file = new FileWriter(output_file.toString())) {
+            for (int d=0; d < n_docs; d++) {
+                file.write(docs[d] + ',');
+                for (int p=0; p < n_personas; p++) {
+                    file.write(t_document_persona_counts[d][p] + ",");
+                }
+                file.write("\n");
+            }
+        }
+        /*
+        output_file = Paths.get(outputDir, "persona_head_phrase_counts.csv");
+        try (FileWriter file = new FileWriter(output_file.toString())) {
+            for (int v=0; v < head_phrase_vocab_size; v++) {
+                file.write(head_phrase_vocab[v] + ',');
+                for (int p=0; p < n_personas; p++) {
+                    file.write(persona_head_phrase_counts[p][v] + ",");
+                }
+                file.write("\n");
+            }
+        }
+        */
+    }
 
 }

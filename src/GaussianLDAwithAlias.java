@@ -807,6 +807,8 @@ class GaussianLDAwithAliasSampler {
                     for (int e = 0; e < n_entities; e++) {
                         t_entity_persona_counts[e][entity_personas[e]] += 1;
                     }
+
+
                 }
             }
             else if (i % subsampling == 0) {
