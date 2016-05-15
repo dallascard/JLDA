@@ -387,7 +387,6 @@ class GaussianLDAmentionsSampler {
         document_persona_totals = new int[n_docs];
         //persona_role_topic_counts = new int[n_personas][n_roles][n_topics];
         persona_topic_counts = new int[n_personas][n_topics];
-        topic_vocab_counts = new int[n_topics][vocab_size];
         //persona_role_counts = new int[n_personas][n_roles];
         persona_counts = new int[n_personas];
         //topic_tuple_counts = new int[n_topics];
@@ -492,14 +491,12 @@ class GaussianLDAmentionsSampler {
         // keep track of tuple assignements for now, for later interpretability
         for (int j = 0; j < n_tuples; j++) {
             int v_j = tuple_vocab[j];
-            int r_j = tuple_role[j];
             int m_j = tuple_mention[j];
             int e_j = mention_entity[m_j];
             int p_j = entity_personas[e_j];
             int z_j = mention_topics[m_j];
 
             persona_topic_counts[p_j][z_j] += 1;
-            topic_vocab_counts[z_j][v_j] += 1;
             persona_counts[p_j] += 1;
             //persona_role_vocab_counts[p_j][r_j][v_j] += 1;
 
@@ -669,9 +666,7 @@ class GaussianLDAmentionsSampler {
                 int p_j = entity_personas[e_j];
 
                 // remove the counts for this word
-                //persona_role_topic_counts[p_j][r_j][z_j] -= 1;
                 persona_topic_counts[p_j][z_j] -= 1;
-                //topic_vocab_counts[z_j][v_j] -= 1;
                 topic_counts[z_j] -= 1;
 
                 // subtract the vector for this tuple from the corresponding topic sum and sum squared counters
@@ -726,16 +721,6 @@ class GaussianLDAmentionsSampler {
                 persona_topic_counts[p_j][k] += 1;
                 topic_counts[k] += 1;
 
-                if (z_j != k) {
-                    List<Integer> tuples = mention_tuples.get(j);
-                    for (int t : tuples) {
-                        //int r_j = tuple_role[t];
-                        int v_j = tuple_vocab[t];
-                        topic_vocab_counts[z_j][v_j] -= 1;
-                        topic_vocab_counts[k][v_j] += 1;
-                    }
-                }
-
                 // update sum and sum squared trackers
                 DenseMatrix64F sum = sum_topic_vectors.get(k);
                 CommonOps.add(data_vectors[j], sum, sum);
@@ -753,6 +738,7 @@ class GaussianLDAmentionsSampler {
                     System.out.print("-");
                     persona_role_vocab_counts = new int[n_personas][n_roles][vocab_size];
                     persona_head_word_counts = new int[n_personas][head_word_vocab_size];
+                    topic_vocab_counts = new int[n_topics][vocab_size];
 
                     // update tuples and head words associated with personas
                     for (int j = 0; j < n_tuples; j++) {
@@ -760,28 +746,30 @@ class GaussianLDAmentionsSampler {
                         int r_j = tuple_role[j];
                         int m_j = tuple_mention[j];
                         int e_j = mention_entity[m_j];
+                        int z_j = mention_topics[m_j];
                         int p_j = entity_personas[e_j];
-                        persona_role_vocab_counts[p_j][r_j][v_j] += 1;
+                        t_topic_vocab_counts[z_j][v_j] += 1;
+                        t_persona_role_vocab_counts[p_j][r_j][v_j] += 1;
                     }
                     for (int j = 0; j < n_head_words; j++) {
                         int e_j = head_entity_list[j];
                         int v_j = head_vocab_list[j];
                         int p_j = entity_personas[e_j];
-                        persona_head_word_counts[p_j][v_j] += 1;
+                        t_persona_head_word_counts[p_j][v_j] += 1;
                     }
 
                     for (int p = 0; p < n_personas; p++) {
                         //t_persona_counts[p] += persona_counts[p];
+                        /*
                         for (int r = 0; r < n_roles; r++) {
                             //t_persona_role_counts[p][r] += persona_role_counts[p][r];
-                            /*
                             for (int k = 0; k < n_topics; k++) {
                                 t_persona_role_topic_counts[p][r][k] += persona_role_topic_counts[p][r][k];
                             }
-                            */
                             for (int v = 0; v < vocab_size; v++)
                                 t_persona_role_vocab_counts[p][r][v] += persona_role_vocab_counts[p][r][v];
                         }
+                        */
                         /*
                         for (int k = 0; k < n_topics; k++) {
                             t_persona_topic_counts[p][k] += persona_topic_counts[p][k];
@@ -790,17 +778,21 @@ class GaussianLDAmentionsSampler {
                         for (int d = 0; d < n_docs; d++) {
                             t_document_persona_counts[d][p] += document_persona_counts[d][p];
                         }
+                        /*
                         for (int v = 0; v < head_word_vocab_size; v++) {
                             t_persona_head_word_counts[p][v] += persona_head_word_counts[p][v];
                         }
+                        */
                         //for (int v = 0; v < head_phrase_vocab_size; v++) {
                         //    t_persona_head_phrase_counts[p][v] += persona_head_phrase_counts[p][v];
                         //}
                     }
+                    /*
                     for (int k = 0; k < n_topics; k++) {
                         for (int v = 0; v < vocab_size; v++)
                             t_topic_vocab_counts[k][v] += topic_vocab_counts[k][v];
                     }
+                    */
                     /*
                     for (int e = 0; e < n_entities; e++) {
                         t_entity_persona_counts[e][entity_personas[e]] += 1;
