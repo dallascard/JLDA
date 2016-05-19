@@ -465,13 +465,13 @@ class ERLDASamplerClusters {
                 persona_role_topic_counts[p_j][r_j][z_j] -= 1;
                 persona_topic_counts[p_j][z_j] -= 1;
                 topic_vocab_counts[z_j][v_j] -= 1;
-                topic_cluster_counts[z_j][v_j] -= 1;
+                topic_cluster_counts[z_j][c_j] -= 1;
                 topic_tuple_counts[z_j] -= 1;
 
                 // compute probabilities
                 double p_sum = 0;
                 for (int k = 0; k < n_topics; k++) {
-                    pr[k] = (persona_topic_counts[p_j][k] + beta) * (topic_cluster_counts[k][v_j] + gamma) / (topic_tuple_counts[k] + gamma * vocab_size);
+                    pr[k] = (persona_topic_counts[p_j][k] + beta) * (topic_cluster_counts[k][c_j] + gamma) / (topic_tuple_counts[k] + gamma * vocab_size);
                     //pr[k] = (topic_vocab_counts[k][v_j] + gamma) / (topic_tuple_counts[k] + gamma * vocab_size);
                     assert pr[k] > 0;
                     p_sum += pr[k];
