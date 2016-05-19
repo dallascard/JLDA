@@ -15,10 +15,11 @@ import cern.colt.matrix.tdouble.impl.DenseDoubleMatrix2D;
 
 
 
-class ERLDASamplerNoRoles {
+class ERLDASamplerClusters {
     private int vocab_size;
     private int n_tuples;
     private int n_docs;
+    private int n_clusters;
     private int n_entities;
     private int n_roles;
     private int n_personas;
@@ -33,6 +34,7 @@ class ERLDASamplerNoRoles {
     private int tuple_vocab[];
     private int tuple_entity[];
     private int tuple_role[];
+    private int tuple_cluster[];
     private HashMap<Integer, List<Integer>> entity_tuples;
     private String vocab[];
     private String docs[];
@@ -53,6 +55,7 @@ class ERLDASamplerNoRoles {
     private int document_persona_counts[][];
     private int document_persona_totals[];
     private int topic_vocab_counts[][];
+    private int topic_cluster_counts[][];
     private int persona_role_topic_counts[][][];
     private int persona_role_counts[][];
     private int persona_topic_counts[][];
@@ -71,7 +74,7 @@ class ERLDASamplerNoRoles {
     private int t_persona_head_word_counts[][];
     //private int t_persona_head_phrase_counts[][];
 
-    public ERLDASamplerNoRoles(String input_dir) throws Exception {
+    public ERLDASamplerClusters(String input_dir) throws Exception {
 
         Path tuple_vocab_file = Paths.get(input_dir, "tuple_vocab.json");
         Path tuple_entity_file = Paths.get(input_dir, "tuple_entity.json");
@@ -79,6 +82,7 @@ class ERLDASamplerNoRoles {
         Path entity_doc_file = Paths.get(input_dir, "entity_doc.json");
         Path vocab_file = Paths.get(input_dir, "vocab.json");
         Path docs_file = Paths.get(input_dir, "docs.json");
+        Path tuple_cluster_file = Paths.get(input_dir, "tuple_clusters.json");
 
         Path head_vocab_file = Paths.get(input_dir, "head_word_vocab_list.json");
         Path head_entity_file = Paths.get(input_dir, "head_word_entity_list.json");
@@ -95,6 +99,7 @@ class ERLDASamplerNoRoles {
         JSONArray tuple_role_json = (JSONArray) parser.parse(new FileReader(tuple_role_file.toString()));
         JSONArray vocab_json = (JSONArray) parser.parse(new FileReader(vocab_file.toString()));
         JSONArray docs_json = (JSONArray) parser.parse(new FileReader(docs_file.toString()));
+        JSONArray tuple_cluster_json = (JSONArray) parser.parse(new FileReader(tuple_cluster_file.toString()));
         JSONArray head_vocab_json = (JSONArray) parser.parse(new FileReader(head_vocab_file.toString()));
         JSONArray head_entity_json = (JSONArray) parser.parse(new FileReader(head_entity_file.toString()));
         JSONArray head_word_vocab_json = (JSONArray) parser.parse(new FileReader(head_word_vocab_file.toString()));
@@ -127,9 +132,11 @@ class ERLDASamplerNoRoles {
         // transfer the tuple-vocab and tuple-entity mappings to arrays and count the vocabulary size
         vocab_size = 0;
         n_roles = 0;
+        n_clusters = 0;
         tuple_vocab = new int[n_tuples];
         tuple_entity = new int[n_tuples];
         tuple_role = new int[n_tuples];
+        tuple_cluster = new int[n_tuples];
         // also record all the tuples associated with each entity
         entity_tuples = new HashMap<>();
 
@@ -137,11 +144,15 @@ class ERLDASamplerNoRoles {
             tuple_vocab[i] = ((Long) tuple_vocab_json.get(i)).intValue();
             tuple_entity[i] = ((Long) tuple_entity_json.get(i)).intValue();
             tuple_role[i] = ((Long) tuple_role_json.get(i)).intValue();
+            tuple_cluster[i] = ((Long) tuple_cluster_json.get(i)).intValue();
             if (tuple_vocab[i] > vocab_size) {
                 vocab_size = tuple_vocab[i];
             }
             if (tuple_role[i] > n_roles) {
                 n_roles = tuple_role[i];
+            }
+            if (tuple_cluster[i] > n_clusters) {
+                n_clusters = tuple_cluster[i];
             }
             // if we haven't seen this entity before, make a new list for it
             if (entity_tuples.get(tuple_entity[i]) == null) {
@@ -160,6 +171,7 @@ class ERLDASamplerNoRoles {
         }
         vocab_size += 1;  // one larger than largest index
         n_roles += 1;
+        n_clusters += 1;
 
         vocab = new String[vocab_size];
         for (int i = 0; i < vocab_size; i++) {
@@ -178,7 +190,6 @@ class ERLDASamplerNoRoles {
         //head_phrase_vocab_list = new int[n_head_phrases];
         //head_phrase_entity_list = new int[n_head_phrases];
         //entity_head_phrases = new HashMap<>();
-
 
         head_word_vocab_size = 0;
         for (int i = 0; i < n_head_words; i++) {
@@ -229,6 +240,7 @@ class ERLDASamplerNoRoles {
         System.out.println("number of documents=" + n_docs);
         System.out.println("number of tuples=" + n_tuples);
         System.out.println("number of roles=" + n_roles);
+        System.out.println("number of clusters=" + n_clusters);
         System.out.println("vocab size=" + vocab_size);
 
     }
@@ -250,6 +262,7 @@ class ERLDASamplerNoRoles {
         document_persona_totals = new int[n_docs];
         persona_role_topic_counts = new int[n_personas][n_roles][n_topics];
         topic_vocab_counts = new int[n_topics][vocab_size];
+        topic_cluster_counts = new int[n_topics][n_clusters];
         persona_role_counts = new int[n_personas][n_roles];
         topic_tuple_counts = new int[n_topics];
         persona_role_vocab_counts = new int[n_personas][n_roles][vocab_size];
@@ -284,12 +297,14 @@ class ERLDASamplerNoRoles {
             int v_j = tuple_vocab[j];
             int e_j = tuple_entity[j];
             int r_j = tuple_role[j];
+            int c_j = tuple_cluster[j];
             int p_j = entity_personas[e_j];
             int k = ThreadLocalRandom.current().nextInt(0, n_topics);
 
             tuple_topics[j] = k;
             persona_role_topic_counts[p_j][r_j][k] += 1;
             topic_vocab_counts[k][v_j] += 1;
+            topic_cluster_counts[k][c_j] += 1;
             persona_role_counts[p_j][r_j] += 1;
             topic_tuple_counts[k] += 1;
             persona_role_vocab_counts[p_j][r_j][v_j] += 1;
@@ -443,18 +458,20 @@ class ERLDASamplerNoRoles {
                 int z_j = tuple_topics[j];
                 int r_j = tuple_role[j];
                 int v_j = tuple_vocab[j];
+                int c_j = tuple_cluster[j];
                 int p_j = entity_personas[e_j];
 
                 // remove the counts for this word
                 persona_role_topic_counts[p_j][r_j][z_j] -= 1;
                 persona_topic_counts[p_j][z_j] -= 1;
                 topic_vocab_counts[z_j][v_j] -= 1;
+                topic_cluster_counts[z_j][v_j] -= 1;
                 topic_tuple_counts[z_j] -= 1;
 
                 // compute probabilities
                 double p_sum = 0;
                 for (int k = 0; k < n_topics; k++) {
-                    pr[k] = (persona_topic_counts[p_j][k] + beta) * (topic_vocab_counts[k][v_j] + gamma) / (topic_tuple_counts[k] + gamma * vocab_size);
+                    pr[k] = (persona_topic_counts[p_j][k] + beta) * (topic_cluster_counts[k][v_j] + gamma) / (topic_tuple_counts[k] + gamma * vocab_size);
                     //pr[k] = (topic_vocab_counts[k][v_j] + gamma) / (topic_tuple_counts[k] + gamma * vocab_size);
                     assert pr[k] > 0;
                     p_sum += pr[k];
@@ -473,6 +490,7 @@ class ERLDASamplerNoRoles {
                 persona_role_topic_counts[p_j][r_j][k] += 1;
                 persona_topic_counts[p_j][k] += 1;
                 topic_vocab_counts[k][v_j] += 1;
+                topic_cluster_counts[k][c_j] += 1;
                 topic_tuple_counts[k] += 1;
 
             }

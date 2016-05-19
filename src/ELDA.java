@@ -1,12 +1,4 @@
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
-import java.io.FileWriter;
-import java.util.List;
-
-import org.json.simple.JSONObject;
 
 public class ELDA {
 
@@ -76,7 +68,7 @@ public class ELDA {
             sampler.run(n_personas, n_topics, alpha, beta, gamma, n_iter, burn_in, subsampling, output_dir, slice_width);
         }
         else {
-            ERLDASamplerNoRoles sampler = new ERLDASamplerNoRoles(input_dir);
+            ERLDASamplerClusters sampler = new ERLDASamplerClusters(input_dir);
             sampler.run(n_personas, n_topics, alpha, beta, gamma, n_iter, burn_in, subsampling, output_dir, slice_width);
         }
 
