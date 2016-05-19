@@ -26,6 +26,7 @@ public class ELDA {
         params.put("-u", "1000");                     // burn_in
         params.put("-s", "25");                      // subsampling
         params.put("-w", "10.0");                      // subsampling
+        params.put("-r", "");                      // subsampling
 
 
         String arg = null;
@@ -53,6 +54,11 @@ public class ELDA {
         String input_dir = params.get("-d");
         String output_dir = params.get("-o");
 
+        String roles_flag = params.get("-r");
+        boolean use_roles = true;
+        if (roles_flag.length() > 0)
+            use_roles = false;
+
         double alpha = Double.parseDouble(params.get("-a"));
         double beta = Double.parseDouble(params.get("-b"));
         double gamma = Double.parseDouble(params.get("-g"));
@@ -65,8 +71,14 @@ public class ELDA {
         double slice_width = Double.parseDouble(params.get("-w"));
 
         //ELDASampler sampler = new ELDASampler(entity_doc_file, tuple_vocab_file, tuple_entity_file, vocab_file, docs_file);
-        ERLDASampler sampler = new ERLDASampler(input_dir);
-        sampler.run(n_personas, n_topics, alpha, beta, gamma, n_iter, burn_in, subsampling, output_dir, slice_width);
+        if (use_roles) {
+            ERLDASampler sampler = new ERLDASampler(input_dir);
+            sampler.run(n_personas, n_topics, alpha, beta, gamma, n_iter, burn_in, subsampling, output_dir, slice_width);
+        }
+        else {
+            ERLDASamplerNoRoles sampler = new ERLDASamplerNoRoles(input_dir);
+            sampler.run(n_personas, n_topics, alpha, beta, gamma, n_iter, burn_in, subsampling, output_dir, slice_width);
+        }
 
     }
 }
