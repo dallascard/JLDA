@@ -1,6 +1,6 @@
 import java.util.HashMap;
 
-public class ELDA {
+public class ELDAClusters {
 
     public static void main(String args[]) throws Exception {
 
@@ -56,7 +56,7 @@ public class ELDA {
         double slice_width = Double.parseDouble(params.get("-w"));
 
         //ELDASampler sampler = new ELDASampler(entity_doc_file, tuple_vocab_file, tuple_entity_file, vocab_file, docs_file);
-        ERLDASampler sampler = new ERLDASampler(input_dir);
+        ERLDASamplerClusters sampler = new ERLDASamplerClusters(input_dir);
         sampler.run(n_personas, n_topics, alpha, beta, gamma, n_iter, burn_in, subsampling, output_dir, slice_width);
 
     }
