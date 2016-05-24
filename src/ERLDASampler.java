@@ -618,7 +618,7 @@ class ERLDASampler {
             for (int v=0; v < head_phrase_vocab_size; v++) {
                 file.write(head_phrase_vocab[v] + ',');
                 for (int p=0; p < n_personas; p++) {
-                    file.write(persona_head_phrase_counts[p][v] + ",");
+                    file.write(t_persona_head_phrase_counts[p][v] + ",");
                 }
                 file.write("\n");
             }
