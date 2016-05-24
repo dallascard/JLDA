@@ -9,17 +9,17 @@ public class ELDAwithDP {
         // set defaults
         params.put("-d", "");  // input dir
         params.put("-o", "");  // output dir
-        params.put("-p", "25");                     // n_personas
-        params.put("-k", "25");                     // n_topics
-        params.put("-a", "1");                      // alpha
-        params.put("-b", "1");                      // beta
-        params.put("-g", "1");                      // gamma
-        params.put("-l", "0.1");                    // lambda
-        params.put("-i", "3000");                    // n_iter
-        params.put("-u", "1000");                     // burn_in
-        params.put("-s", "25");                      // subsampling
+        params.put("-p", "50");                     // n_personas
+        params.put("-k", "100");                     // n_topics
+        params.put("-a", "0.1");                      // alpha
+        params.put("-b", "0.1");                      // beta
+        params.put("-g", "0.1");                      // gamma
+        params.put("-l", "0.5");                    // lambda
+        params.put("-i", "11000");                    // n_iter
+        params.put("-u", "10000");                     // burn_in
+        params.put("-s", "10");                      // subsampling
         params.put("-w", "10.0");                      // subsampling
-        params.put("-t", "1000");                // max story types
+        params.put("-t", "5000");                // max story types
 
         String arg = null;
         for (String s: args) {

@@ -27,8 +27,8 @@ class ERLDASamplerClusters {
 
     private int head_word_vocab_size;
     private int n_head_words;
-    //private int head_phrase_vocab_size;
-    //private int n_head_phrases;
+    private int head_phrase_vocab_size;
+    private int n_head_phrases;
 
     private int entity_doc[];
     private int tuple_vocab[];
@@ -44,10 +44,10 @@ class ERLDASamplerClusters {
     private String head_word_vocab[];
     private HashMap<Integer, List<Integer>> entity_head_words;
 
-    //private int head_phrase_vocab_list[];
-    //private int head_phrase_entity_list[];
-    //private String head_phrase_vocab[];
-    //private HashMap<Integer, List<Integer>> entity_head_phrases;
+    private int head_phrase_vocab_list[];
+    private int head_phrase_entity_list[];
+    private String head_phrase_vocab[];
+    private HashMap<Integer, List<Integer>> entity_head_phrases;
 
     private int entity_personas[];
     private int tuple_topics[];
@@ -62,7 +62,8 @@ class ERLDASamplerClusters {
     private int persona_counts[];
     private int topic_tuple_counts[];
     private int persona_role_vocab_counts[][][];
-
+    private int persona_head_word_counts[][];
+    private int persona_head_phrase_counts[][];
 
     private int t_document_persona_counts[][];
     private int t_persona_role_topic_counts[][][];
@@ -72,7 +73,7 @@ class ERLDASamplerClusters {
     private int t_persona_role_vocab_counts[][][];
     private int t_entity_persona_counts[][];
     private int t_persona_head_word_counts[][];
-    //private int t_persona_head_phrase_counts[][];
+    private int t_persona_head_phrase_counts[][];
 
     public ERLDASamplerClusters(String input_dir) throws Exception {
 
@@ -88,9 +89,9 @@ class ERLDASamplerClusters {
         Path head_entity_file = Paths.get(input_dir, "head_word_entity_list.json");
         Path head_word_vocab_file = Paths.get(input_dir, "head_word_vocab.json");
 
-        //Path head_phrase_vocab_file = Paths.get(input_dir, "head_phrase_vocab_list.json");
-        //Path head_phrase_entity_file = Paths.get(input_dir, "head_phrase_entity_list.json");
-        //Path head_phrase_full_vocab_file = Paths.get(input_dir, "head_phrase_vocab.json");
+        Path head_phrase_vocab_file = Paths.get(input_dir, "head_phrase_vocab_list.json");
+        Path head_phrase_entity_file = Paths.get(input_dir, "head_phrase_entity_list.json");
+        Path head_phrase_full_vocab_file = Paths.get(input_dir, "head_phrase_vocab.json");
 
         JSONParser parser = new JSONParser();
         JSONArray entity_doc_json = (JSONArray) parser.parse(new FileReader(entity_doc_file.toString()));
@@ -103,19 +104,19 @@ class ERLDASamplerClusters {
         JSONArray head_vocab_json = (JSONArray) parser.parse(new FileReader(head_vocab_file.toString()));
         JSONArray head_entity_json = (JSONArray) parser.parse(new FileReader(head_entity_file.toString()));
         JSONArray head_word_vocab_json = (JSONArray) parser.parse(new FileReader(head_word_vocab_file.toString()));
-        //JSONArray head_phrase_vocab_json = (JSONArray) parser.parse(new FileReader(head_phrase_vocab_file.toString()));
-        //JSONArray head_phrase_entity_json = (JSONArray) parser.parse(new FileReader(head_phrase_entity_file.toString()));
-        //JSONArray head_phrase_full_vocab_json = (JSONArray) parser.parse(new FileReader(head_phrase_full_vocab_file.toString()));
+        JSONArray head_phrase_vocab_json = (JSONArray) parser.parse(new FileReader(head_phrase_vocab_file.toString()));
+        JSONArray head_phrase_entity_json = (JSONArray) parser.parse(new FileReader(head_phrase_entity_file.toString()));
+        JSONArray head_phrase_full_vocab_json = (JSONArray) parser.parse(new FileReader(head_phrase_full_vocab_file.toString()));
 
 
         n_tuples = tuple_vocab_json.size();
         System.out.println("n_tuples=" + n_tuples);
         n_entities = entity_doc_json.size();
         System.out.println("n_entities=" + n_entities);
-        n_head_words = head_vocab_json.size();
+        n_head_words = head_entity_json.size();
         System.out.println("n_head_words=" + n_head_words);
-        //n_head_phrases = head_phrase_vocab_json.size();
-        //System.out.println("n_head_phrases=" + n_head_phrases);
+        n_head_phrases = head_phrase_vocab_json.size();
+        System.out.println("n_head_phrases=" + n_head_phrases);
 
 
         // transfer entity to document mapping from json to array, and count the number of documents
@@ -187,9 +188,9 @@ class ERLDASamplerClusters {
         head_entity_list = new int[n_head_words];
         entity_head_words = new HashMap<>();
 
-        //head_phrase_vocab_list = new int[n_head_phrases];
-        //head_phrase_entity_list = new int[n_head_phrases];
-        //entity_head_phrases = new HashMap<>();
+        head_phrase_vocab_list = new int[n_head_phrases];
+        head_phrase_entity_list = new int[n_head_phrases];
+        entity_head_phrases = new HashMap<>();
 
         head_word_vocab_size = 0;
         for (int i = 0; i < n_head_words; i++) {
@@ -213,7 +214,6 @@ class ERLDASamplerClusters {
             head_word_vocab[i] = (String) head_word_vocab_json.get(i);
         }
 
-        /*
         head_phrase_vocab_size = 0;
         for (int i = 0; i < n_head_phrases; i++) {
             head_phrase_vocab_list[i] = ((Long) head_phrase_vocab_json.get(i)).intValue();
@@ -235,7 +235,6 @@ class ERLDASamplerClusters {
         for (int i = 0; i < head_phrase_vocab_size; i++) {
             head_phrase_vocab[i] = (String) head_phrase_full_vocab_json.get(i);
         }
-        */
 
         System.out.println("number of documents=" + n_docs);
         System.out.println("number of tuples=" + n_tuples);
@@ -269,8 +268,8 @@ class ERLDASamplerClusters {
         persona_topic_counts = new int[n_personas][n_topics];
         persona_counts = new int[n_personas];
 
-        int [][] persona_head_word_counts = new int[n_personas][head_word_vocab_size];
-        //int [][] persona_head_phrase_counts = new int[n_personas][head_phrase_vocab_size];
+        persona_head_word_counts = new int[n_personas][head_word_vocab_size];
+        persona_head_phrase_counts = new int[n_personas][head_phrase_vocab_size];
 
         t_document_persona_counts = new int[n_docs][n_personas];
         t_persona_role_topic_counts = new int[n_personas][n_roles][n_topics];
@@ -280,7 +279,7 @@ class ERLDASamplerClusters {
         t_persona_role_vocab_counts = new int[n_personas][n_roles][vocab_size];
         t_entity_persona_counts = new int[n_entities][n_personas];
         t_persona_head_word_counts= new int[n_personas][head_word_vocab_size];
-        //t_persona_head_phrase_counts= new int[n_personas][head_phrase_vocab_size];
+        t_persona_head_phrase_counts= new int[n_personas][head_phrase_vocab_size];
 
         // do random initalization
         for (int e=0; e < n_entities; e++) {
@@ -332,14 +331,12 @@ class ERLDASamplerClusters {
             persona_head_word_counts[p_j][v_j] += 1;
         }
 
-        /*
         for (int j=0; j < n_head_phrases; j++) {
             int e_j = head_phrase_entity_list[j];
             int v_j = head_phrase_vocab_list[j];
             int p_j = entity_personas[e_j];
             persona_head_phrase_counts[p_j][v_j] += 1;
         }
-        */
 
         // start sampling
         System.out.println("Doing burn-in");
@@ -440,14 +437,12 @@ class ERLDASamplerClusters {
                     persona_head_word_counts[p_e][v_t] -= 1;
                     persona_head_word_counts[p][v_t] += 1;
                 }
-                /*
                 List<Integer> head_phrases = entity_head_phrases.get(e);
                 for (int t : head_phrases) {
                     int v_t = head_phrase_vocab_list[t];
                     persona_head_phrase_counts[p_e][v_t] -= 1;
                     persona_head_phrase_counts[p][v_t] += 1;
                 }
-                */
             }
 
             // then sample topics
@@ -515,9 +510,9 @@ class ERLDASamplerClusters {
                         for (int v = 0; v < head_word_vocab_size; v++) {
                             t_persona_head_word_counts[p][v] += persona_head_word_counts[p][v];
                         }
-                        //for (int v = 0; v < head_phrase_vocab_size; v++) {
-                        //    t_persona_head_phrase_counts[p][v] += persona_head_phrase_counts[p][v];
-                        //}
+                        for (int v = 0; v < head_phrase_vocab_size; v++) {
+                            t_persona_head_phrase_counts[p][v] += persona_head_phrase_counts[p][v];
+                        }
                     }
                     for (int k = 0; k < n_topics; k++) {
                         t_topic_tuple_counts[k] += topic_tuple_counts[k];
@@ -654,7 +649,6 @@ class ERLDASamplerClusters {
             }
         }
 
-        /*
         output_file = Paths.get(outputDir, "persona_head_phrase_counts.csv");
         try (FileWriter file = new FileWriter(output_file.toString())) {
             for (int v=0; v < head_phrase_vocab_size; v++) {
@@ -665,7 +659,6 @@ class ERLDASamplerClusters {
                 file.write("\n");
             }
         }
-        */
 
         return t_persona_role_vocab_counts;
     }
