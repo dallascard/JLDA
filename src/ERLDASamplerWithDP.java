@@ -25,6 +25,7 @@ class ERLDASamplerWithDP {
     private int n_topics;
     private int max_story_types;
     private int n_story_types_used;
+    private int n_most_story_types_used;
 
     private int head_word_vocab_size;
     private int n_head_words;
@@ -385,6 +386,7 @@ class ERLDASamplerWithDP {
             }
 
         }
+        n_most_story_types_used = n_story_types_used;
 
         System.out.println("initial number of story types = " + n_story_types_used);
         for (int s = 0; s < n_story_types_used; s++) {
@@ -438,6 +440,7 @@ class ERLDASamplerWithDP {
             // first sample story types
             for (int i = 1; i < n_docs; i++) {
                 int s_i = doc_story_type[i];
+                // deallocate this article from the story type
                 doc_story_type[i] = -1;
                 story_type_doc_counts[s_i] -= 1;
                 entities = doc_entities.get(i);
@@ -446,6 +449,7 @@ class ERLDASamplerWithDP {
                     story_type_persona_counts[s_i][p_e] -= 1;
                     story_type_entity_counts[s_i] -= 1;
                 }
+                // if one of the story types is now empty, reassign
                 if (story_type_doc_counts[s_i] == 0) {
                     //System.out.println("Eliminating story type");
                     // make sure all counts reach zero at the same time
@@ -524,6 +528,10 @@ class ERLDASamplerWithDP {
                 if (s == s_new) {
                     //System.out.println("Creating new story type");
                     n_story_types_used += 1;
+                }
+
+                if (n_story_types_used > n_most_story_types_used) {
+                    n_most_story_types_used = n_story_types_used;
                 }
 
             }
@@ -664,7 +672,6 @@ class ERLDASamplerWithDP {
             if (epoch > burn_in) {
                 if (epoch % subsampling == 0) {
                     System.out.print("-");
-                    System.out.println(n_story_types_used);
                     for (int p = 0; p < n_personas; p++) {
                         for (int r = 0; r < n_roles; r++) {
                             t_persona_role_counts[p][r] += persona_role_counts[p][r];
@@ -834,7 +841,7 @@ class ERLDASamplerWithDP {
         try (FileWriter file = new FileWriter(output_file.toString())) {
             for (int d = 0; d < n_docs; d++) {
                 file.write(docs[d] + ',');
-                for (int s = 0; s < max_story_types; s++) {
+                for (int s = 0; s < n_most_story_types_used; s++) {
                     file.write(t_doc_story_type_counts[d][s] + ",");
                 }
                 file.write("\n");
@@ -843,8 +850,9 @@ class ERLDASamplerWithDP {
         output_file = Paths.get(outputDir, "persona_story_types.csv");
         try (FileWriter file = new FileWriter(output_file.toString())) {
             for (int p = 0; p < n_personas; p++) {
-                file.write(p + ',');
-                for (int s = 0; s < max_story_types; s++) {
+                Integer p_num = p;
+                file.write(p_num.toString() + ',');
+                for (int s = 0; s < n_most_story_types_used; s++) {
                     file.write(t_story_type_persona_counts[s][p] + ",");
                 }
                 file.write("\n");
