@@ -403,6 +403,7 @@ class ERLDASampler {
                 for (int t : head_words) {
                     int v_t = head_vocab_list[t];
                     persona_head_word_counts[p_e][v_t] -= 1;
+                    assert persona_head_word_counts[p_e][v_t] >= 0;
                     persona_head_word_counts[p][v_t] += 1;
                 }
                 List<Integer> head_phrases = entity_head_phrases.get(e);
