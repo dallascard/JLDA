@@ -349,12 +349,16 @@ class ERLDASampler {
                     persona_role_topic_counts[p_e][role_t][topic_t] -= 1;
                     persona_role_counts[p_e][role_t] -= 1;
                 }
-                for (int t : tuples) {
-                    int topic_t = tuple_topics[t];
-                    int role_t = tuple_role[t];
-
-                    for (int p = 0; p < n_personas; p++) {
-                        pr[p] += Math.log(persona_role_topic_counts[p][role_t][topic_t] + beta) - Math.log(persona_role_counts[p][role_t] + beta * n_topics);
+                for (int p = 0; p < n_personas; p++) {
+                    int [] local_role_counts = new int[n_roles];
+                    int [][] local_role_topic_counts = new int[n_roles][n_topics];
+                    for (int t : tuples) {
+                        int topic_t = tuple_topics[t];
+                        int role_t = tuple_role[t];
+                        //pr[p] += Math.log(persona_role_topic_counts[p][role_t][topic_t] + beta) - Math.log(persona_role_counts[p][role_t] + beta * n_topics);
+                        pr[p] += Math.log(persona_role_topic_counts[p][role_t][topic_t] + beta + local_role_topic_counts[role_t][topic_t]) - Math.log(persona_role_counts[p][role_t] + beta * n_topics + local_role_counts[role_t]);
+                        local_role_counts[role_t] += 1;
+                        local_role_topic_counts[role_t][topic_t] += 1;
                     }
                 }
                 for (int t : tuples) {
