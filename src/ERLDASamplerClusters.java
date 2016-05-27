@@ -375,12 +375,15 @@ class ERLDASamplerClusters {
                     persona_topic_counts[p_e][topic_t] -= 1;
                     persona_counts[p_e] -= 1;
                 }
-                for (int t : tuples) {
-                    int topic_t = tuple_topics[t];
-                    int role_t = tuple_role[t];
-
-                    for (int p = 0; p < n_personas; p++) {
-                        pr[p] += Math.log(persona_topic_counts[p][topic_t] + beta) - Math.log(persona_counts[p] + beta * n_topics);
+                for (int p = 0; p < n_personas; p++) {
+                    int local_tuple_counts = 0;
+                    int [] local_topic_counts = new int[n_topics];
+                    for (int t : tuples) {
+                        int topic_t = tuple_topics[t];
+                        //pr[p] += Math.log(persona_topic_counts[p][topic_t] + beta) - Math.log(persona_counts[p] + beta * n_topics);
+                        pr[p] += Math.log(persona_topic_counts[p][topic_t] + beta + local_topic_counts[topic_t]) - Math.log(persona_counts[p] + beta * n_topics + local_tuple_counts);
+                        local_tuple_counts += 1;
+                        local_topic_counts[topic_t] += 1;
                     }
                 }
                 for (int t : tuples) {
