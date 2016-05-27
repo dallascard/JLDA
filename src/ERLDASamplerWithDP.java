@@ -1027,16 +1027,19 @@ class ERLDASamplerWithDP {
     }
 
 
-    // using formula from https://stats.stackexchange.com/questions/117262/dirichlet-process-hyperparameter-estimation-with-sampling
-    // concerned this might be an approximation;
-    // need to check out a couple of papers
-    // the approximation I come up with would not have the lambda^P, but that is certainly an approximation...
+    // Calculate the likelihood of lambda given k instantiated clusters for n itesm using (Antoniak, 1974)
+    // l(\lambda|k) \propto \lambda^K \Gamma(\lambda) / \Gamma(\lambda + n)
     private double calc_log_p_lambda(double lambda) {
-        double log_p = Gamma.logGamma(lambda) - Gamma.logGamma(lambda + n_docs) + n_story_types_used * Math.log(lambda);
+        return n_story_types_used * Math.log(lambda) + Gamma.logGamma(lambda) - Gamma.logGamma(lambda + n_docs);
+    }
+
+    // using my own derivation for this...
+    private double calc_log_p_lambda_myway(double lambda) {
+        double log_p = Gamma.logGamma(n_personas * lambda) - Gamma.logGamma(lambda + n_docs) + n_story_types_used * Math.log(lambda);
         for (int s=0; s < n_story_types_used; s++) {
             //log_p += Math.log(partial_gamma(alpha + document_persona_counts[d][k], document_persona_counts[d][k]));
             log_p += Gamma.logGamma(story_type_doc_counts[s]);
-        //log_p -= Math.log(partial_gamma(n_personas * alpha + document_persona_totals[d], document_persona_totals[d]));
+            //log_p -= Math.log(partial_gamma(n_personas * alpha + document_persona_totals[d], document_persona_totals[d]));
         }
         return log_p;
     }
