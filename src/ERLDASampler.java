@@ -233,6 +233,8 @@ class ERLDASampler {
 
     public int[][][] run(int n_personas, int n_topics, double alpha, double beta, double gamma, int n_iter, int burn_in, int subsampling, String outputDir, double slice_width) throws Exception {
 
+        test_dir(outputDir);
+
         this.n_personas = n_personas;
         this.n_topics = n_topics;
 
@@ -777,5 +779,14 @@ class ERLDASampler {
         //System.out.println("new gamma = " + gamma);
         return gamma;
     }
+
+    // make sure we are able to write to the output directory
+    private void test_dir(String outputDir) throws Exception {
+        Path output_file = Paths.get(outputDir, "test.csv");
+        try (FileWriter file = new FileWriter(output_file.toString())) {
+            file.write("test\n");
+        }
+    }
+
 
 }
