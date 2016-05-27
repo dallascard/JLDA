@@ -1033,17 +1033,6 @@ class ERLDASamplerWithDP {
         return n_story_types_used * Math.log(lambda) + Gamma.logGamma(lambda) - Gamma.logGamma(lambda + n_docs);
     }
 
-    // using my own derivation for this...
-    private double calc_log_p_lambda_myway(double lambda) {
-        double log_p = Gamma.logGamma(n_personas * lambda) - Gamma.logGamma(lambda + n_docs) + n_story_types_used * Math.log(lambda);
-        for (int s=0; s < n_story_types_used; s++) {
-            //log_p += Math.log(partial_gamma(alpha + document_persona_counts[d][k], document_persona_counts[d][k]));
-            log_p += Gamma.logGamma(story_type_doc_counts[s]);
-            //log_p -= Math.log(partial_gamma(n_personas * alpha + document_persona_totals[d], document_persona_totals[d]));
-        }
-        return log_p;
-    }
-
     private double slice_sample_lambda(double lambda, double slice_width) {
         //System.out.println("Tuning lambda");
         double log_p_current_lambda = calc_log_p_lambda(lambda);

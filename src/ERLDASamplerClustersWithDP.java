@@ -14,7 +14,7 @@ import cern.colt.matrix.tdouble.impl.DenseDoubleMatrix1D;
 import cern.colt.matrix.tdouble.impl.DenseDoubleMatrix2D;
 
 
-class ERLDASamplerClusters {
+class ERLDASamplerClustersWithDP {
     private int vocab_size;
     private int n_tuples;
     private int n_docs;
@@ -23,6 +23,9 @@ class ERLDASamplerClusters {
     private int n_roles;
     private int n_personas;
     private int n_topics;
+    private int max_story_types;
+    private int n_story_types_used;
+    private int n_most_story_types_used;
 
     private int head_word_vocab_size;
     private int n_head_words;
@@ -35,6 +38,7 @@ class ERLDASamplerClusters {
     private int tuple_role[];
     private int tuple_cluster[];
     private HashMap<Integer, List<Integer>> entity_tuples;
+    private HashMap<Integer, List<Integer>> doc_entities;
     private String vocab[];
     private String docs[];
 
@@ -50,6 +54,7 @@ class ERLDASamplerClusters {
 
     private int entity_personas[];
     private int tuple_topics[];
+    private int doc_story_type[];
 
     private int document_persona_counts[][];
     private int document_persona_totals[];
@@ -63,6 +68,11 @@ class ERLDASamplerClusters {
     private int persona_role_vocab_counts[][][];
     private int persona_head_word_counts[][];
     private int persona_head_phrase_counts[][];
+    private int story_type_persona_counts[][];
+    private int story_type_entity_counts[];
+    private int story_type_doc_counts[];
+    //private HashMap<Integer, Integer>  story_type_index;
+    //private ArrayList<int[]> story_type_persona_counts;
 
     private int t_document_persona_counts[][];
     private int t_persona_role_topic_counts[][][];
@@ -73,8 +83,10 @@ class ERLDASamplerClusters {
     private int t_entity_persona_counts[][];
     private int t_persona_head_word_counts[][];
     private int t_persona_head_phrase_counts[][];
+    private int t_story_type_persona_counts[][];
+    private int t_doc_story_type_counts[][];
 
-    public ERLDASamplerClusters(String input_dir) throws Exception {
+    public ERLDASamplerClustersWithDP(String input_dir) throws Exception {
 
         Path tuple_vocab_file = Paths.get(input_dir, "tuple_vocab.json");
         Path tuple_entity_file = Paths.get(input_dir, "tuple_entity.json");
@@ -112,18 +124,31 @@ class ERLDASamplerClusters {
         System.out.println("n_tuples=" + n_tuples);
         n_entities = entity_doc_json.size();
         System.out.println("n_entities=" + n_entities);
-        n_head_words = head_entity_json.size();
+        n_head_words = head_vocab_json.size();
         System.out.println("n_head_words=" + n_head_words);
         n_head_phrases = head_phrase_vocab_json.size();
         System.out.println("n_head_phrases=" + n_head_phrases);
 
         // transfer entity to document mapping from json to array, and count the number of documents
         n_docs = 0;
+        doc_entities = new HashMap<>();
         entity_doc = new int[n_entities];
         for (int i = 0; i < n_entities; i++) {
             entity_doc[i] = ((Long) entity_doc_json.get(i)).intValue();
             if (entity_doc[i] > n_docs) {
                 n_docs = entity_doc[i];
+            }
+            // keep a list of the entities in each document
+            if (doc_entities.get(entity_doc[i]) == null) {
+                List<Integer> entities = new ArrayList<>();
+                entities.add(i);
+                doc_entities.put(entity_doc[i], entities);
+            }
+            // otherwise, add this tuple to the appropriate list
+            else {
+                List<Integer> entities = doc_entities.get(entity_doc[i]);
+                entities.add(i);
+                doc_entities.put(entity_doc[i], entities);
             }
         }
         n_docs += 1;  // one larger than largest index
@@ -242,21 +267,19 @@ class ERLDASamplerClusters {
 
     }
 
-    public String[] get_vocab() {
-        return vocab;
-    }
-
-    public int[][][] run(int n_personas, int n_topics, double alpha, double beta, double gamma, int n_iter, int burn_in, int subsampling, String outputDir, double slice_width) throws Exception {
+    public int[][][] run(int n_personas, int n_topics, double alpha, double beta, double gamma, double lambda, int n_iter, int burn_in, int subsampling, String outputDir, double slice_width, int max_story_types) throws Exception {
 
         test_dir(outputDir);
 
         this.n_personas = n_personas;
         this.n_topics = n_topics;
+        this.max_story_types = max_story_types;
 
         // initialize arrays
         System.out.println("Initializing arrays");
         entity_personas = new int[n_entities];
         tuple_topics = new int[n_tuples];
+        doc_story_type = new int[n_docs];
         document_persona_counts = new int[n_docs][n_personas];
         document_persona_totals = new int[n_docs];
         persona_role_topic_counts = new int[n_personas][n_roles][n_topics];
@@ -264,9 +287,12 @@ class ERLDASamplerClusters {
         topic_cluster_counts = new int[n_topics][n_clusters];
         persona_role_counts = new int[n_personas][n_roles];
         topic_tuple_counts = new int[n_topics];
-        persona_role_vocab_counts = new int[n_personas][n_roles][vocab_size];
         persona_topic_counts = new int[n_personas][n_topics];
+        persona_role_vocab_counts = new int[n_personas][n_roles][vocab_size];
         persona_counts = new int[n_personas];
+        story_type_persona_counts = new int[max_story_types][n_personas];
+        story_type_entity_counts = new int[max_story_types];
+        story_type_doc_counts = new int[max_story_types];
 
         persona_head_word_counts = new int[n_personas][head_word_vocab_size];
         persona_head_phrase_counts = new int[n_personas][head_phrase_vocab_size];
@@ -279,6 +305,8 @@ class ERLDASamplerClusters {
         t_persona_role_vocab_counts = new int[n_personas][n_roles][vocab_size];
         t_entity_persona_counts = new int[n_entities][n_personas];
         t_persona_head_word_counts= new int[n_personas][head_word_vocab_size];
+        t_story_type_persona_counts = new int[max_story_types][n_personas];
+        t_doc_story_type_counts = new int[n_docs][max_story_types];
         t_persona_head_phrase_counts= new int[n_personas][head_phrase_vocab_size];
 
         // do random initalization
@@ -307,11 +335,85 @@ class ERLDASamplerClusters {
             persona_role_counts[p_j][r_j] += 1;
             topic_tuple_counts[k] += 1;
             persona_role_vocab_counts[p_j][r_j][v_j] += 1;
-            persona_topic_counts[p_j][k] += 1;
-            persona_counts[p_j] += 1;
         }
 
         System.out.println(n_tuples + " tuples");
+
+        // initialize story types
+        int s_0 = 0;
+        doc_story_type[0] = s_0;         // set the first document to a new story type (0)
+        story_type_doc_counts[s_0] += 1;    // increment counts
+        List<Integer> entities = doc_entities.get(0);
+        for (int e : entities) {
+            int p_e = entity_personas[e];
+            story_type_persona_counts[s_0][p_e] += 1;
+            story_type_entity_counts[s_0] += 1;
+        }
+        n_story_types_used = 1;
+
+        for (int i = 1; i < n_docs; i++) {
+            int s_new = n_story_types_used;
+            int n_story_types = n_story_types_used + 1;
+
+            double [] pr = new double[n_story_types];
+
+            for (int s = 0; s < n_story_types; s++) {
+                if (s == s_new) {
+                    pr[s] = Math.log(lambda);
+                }
+                else {
+                    pr[s] = Math.log(story_type_doc_counts[s]);
+                }
+                // get the entities for this document
+                entities = doc_entities.get(i);
+                int [] local_persona_counts = new int[n_personas];
+                int e_i = 0;
+                for (int e : entities) {
+                    int p_e = entity_personas[e];
+                    //pr[s] += Math.log(story_type_persona_counts[s][p_e] + alpha) - Math.log(story_type_entity_counts[s] + alpha * n_personas);
+                    pr[s] += Math.log(story_type_persona_counts[s][p_e] + alpha + local_persona_counts[p_e]) - Math.log(story_type_entity_counts[s] + alpha * n_personas + e_i);
+                    local_persona_counts[p_e] += 1;
+                    e_i += 1;
+                }
+            }
+
+            double p_sum = 0;
+            for (int s = 0; s < n_story_types; s++) {
+                pr[s] = Math.exp(pr[s]);
+                p_sum += pr[s];
+            }
+
+            for (int s = 0; s < n_story_types; s++) {
+                pr[s] = pr[s]/p_sum;
+            }
+
+            double f = ThreadLocalRandom.current().nextDouble();
+            int s = 0;
+            double temp = pr[s];
+            while (f > temp) {
+                s += 1;
+                temp += pr[s];
+            }
+
+            doc_story_type[i] = s;
+            story_type_doc_counts[s] += 1;    // increment counts
+            entities = doc_entities.get(i);
+            for (int e : entities) {
+                int p_e = entity_personas[e];
+                story_type_persona_counts[s][p_e] += 1;
+                story_type_entity_counts[s] += 1;
+            }
+            if (s == s_new) {
+                n_story_types_used += 1;
+            }
+
+        }
+        n_most_story_types_used = n_story_types_used;
+
+        System.out.println("initial number of story types = " + n_story_types_used);
+        for (int s = 0; s < n_story_types_used; s++) {
+            System.out.println(s + ": " + story_type_doc_counts[s]);
+        }
 
         // Determine random orders in which to visit the entities and tuples
         List<Integer> entity_order = new ArrayList<>();
@@ -340,29 +442,137 @@ class ERLDASamplerClusters {
 
         // start sampling
         System.out.println("Doing burn-in");
-        for (int i=0; i < n_iter; i++) {
+        for (int epoch=0; epoch < n_iter; epoch++) {
 
             // slice sample hyperparameters
-            if ((i > 0) & (i % 20 == 0)) {
-                if ((i < 500) | (i % 100 == 0)) {
+            if ((epoch > 0) & (epoch % 20 == 0)) {
+                if ((epoch < 500) | (epoch % 100 == 0)) {
                     alpha = slice_sample_alpha(alpha, slice_width);
                     beta = slice_sample_beta(beta, slice_width);
                     gamma = slice_sample_gamma(gamma, slice_width);
-                    System.out.println("alpha=" + alpha + "; beta=" + beta + "; gamma=" + gamma);
-
+                    lambda = slice_sample_lambda(lambda, slice_width);
+                    System.out.println("alpha=" + alpha + "; beta=" + beta + "; gamma=" + gamma + "; lambda=" + lambda + "; story types=" + n_story_types_used);
                 }
             }
 
-            // first sample personas
+            // first sample story types
+            for (int i = 1; i < n_docs; i++) {
+                int s_i = doc_story_type[i];
+                // deallocate this article from the story type
+                doc_story_type[i] = -1;
+                story_type_doc_counts[s_i] -= 1;
+                entities = doc_entities.get(i);
+                for (int e : entities) {
+                    int p_e = entity_personas[e];
+                    story_type_persona_counts[s_i][p_e] -= 1;
+                    story_type_entity_counts[s_i] -= 1;
+                }
+                // if one of the story types is now empty, reassign
+                if (story_type_doc_counts[s_i] == 0) {
+                    //System.out.println("Eliminating story type");
+                    // make sure all counts reach zero at the same time
+                    assert story_type_entity_counts[s_i] == 0;
+                    for (int p = 0; p < n_personas; p++) {
+                        assert story_type_persona_counts[s_i][p] == 0;
+                    }
+
+                    // now more the last story type to the (now)-emtpy story type
+                    // update counts
+                    n_story_types_used -= 1;
+                    int s_last = n_story_types_used;
+                    story_type_doc_counts[s_i] = story_type_doc_counts[s_last];
+                    story_type_doc_counts[s_last] = 0;
+                    story_type_entity_counts[s_i] = story_type_entity_counts[s_last];
+                    story_type_entity_counts[s_last] = 0;
+                    for (int p = 0; p < n_personas; p++) {
+                        story_type_persona_counts[s_i][p] = story_type_persona_counts[s_last][p];
+                        story_type_persona_counts[s_last][p] = 0;
+                    }
+                    // update assigments
+                    for (int i2 = 0; i2 < n_docs; i2++ )  {
+                        if (doc_story_type[i2] == s_last)  {
+                            doc_story_type[i2] = s_i;
+                        }
+                    }
+                }
+
+                // now sample a new story type for this document
+                int s_new = n_story_types_used;
+                int n_story_types = n_story_types_used + 1;
+
+                double [] pr = new double[n_story_types];
+
+                for (int s = 0; s < n_story_types; s++) {
+                    if (s == s_new) {
+                        pr[s] = Math.log(lambda);
+                    }
+                    else {
+                        pr[s] = Math.log(story_type_doc_counts[s]);
+                    }
+                    // get the entities for this document
+                    entities = doc_entities.get(i);
+                    int [] local_persona_counts = new int[n_personas];
+                    int e_i = 0;
+                    for (int e : entities) {
+                        int p_e = entity_personas[e];
+                        //pr[s] += Math.log(story_type_persona_counts[s][p_e] + alpha) - Math.log(story_type_entity_counts[s] + alpha * n_personas);
+                        pr[s] += Math.log(story_type_persona_counts[s][p_e] + alpha + local_persona_counts[p_e]) - Math.log(story_type_entity_counts[s] + alpha * n_personas + e_i);
+                        local_persona_counts[p_e] += 1;
+                        e_i += 1;
+                    }
+                }
+
+                double p_sum = 0;
+                for (int s = 0; s < n_story_types; s++) {
+                    pr[s] = Math.exp(pr[s]);
+                    p_sum += pr[s];
+                }
+
+                for (int s = 0; s < n_story_types; s++) {
+                    pr[s] = pr[s]/p_sum;
+                }
+
+                double f = ThreadLocalRandom.current().nextDouble();
+                int s = 0;
+                double temp = pr[s];
+                while (f > temp) {
+                    s += 1;
+                    temp += pr[s];
+                }
+
+                doc_story_type[i] = s;
+                story_type_doc_counts[s] += 1;    // increment counts
+                entities = doc_entities.get(i);
+                for (int e : entities) {
+                    int p_e = entity_personas[e];
+                    story_type_persona_counts[s][p_e] += 1;
+                    story_type_entity_counts[s] += 1;
+                }
+                if (s == s_new) {
+                    //System.out.println("Creating new story type");
+                    n_story_types_used += 1;
+                }
+
+                if (n_story_types_used > n_most_story_types_used) {
+                    n_most_story_types_used = n_story_types_used;
+                }
+
+            }
+
+            // then sample personas
             for (int q=0; q < n_entities; q++) {
                 double pr[] = new double[n_personas];
                 int e = entity_order.get(q);
                 int d_e = entity_doc[e];
                 int p_e = entity_personas[e];
+                int s_e = doc_story_type[d_e];
 
+                story_type_persona_counts[s_e][p_e] -= 1;
+                //story_type_entity_counts[s_e] -= 1;
                 document_persona_counts[d_e][p_e] -= 1;
+
                 for (int p=0; p < n_personas; p++) {
-                    pr[p] = Math.log(document_persona_counts[d_e][p] + alpha);
+                    pr[p] = Math.log(story_type_persona_counts[s_e][p] + alpha);
                 }
                 List<Integer> tuples = entity_tuples.get(e);
                 assert tuples != null;
@@ -380,7 +590,7 @@ class ERLDASamplerClusters {
                     int [] local_topic_counts = new int[n_topics];
                     for (int t : tuples) {
                         int topic_t = tuple_topics[t];
-                        //pr[p] += Math.log(persona_topic_counts[p][topic_t] + beta) - Math.log(persona_counts[p] + beta * n_topics);
+                        //pr[p] += Math.log(persona_role_topic_counts[p][role_t][topic_t] + beta) - Math.log(persona_role_counts[p][role_t] + beta * n_topics);
                         pr[p] += Math.log(persona_topic_counts[p][topic_t] + beta + local_topic_counts[topic_t]) - Math.log(persona_counts[p] + beta * n_topics + local_tuple_counts);
                         local_tuple_counts += 1;
                         local_topic_counts[topic_t] += 1;
@@ -416,6 +626,8 @@ class ERLDASamplerClusters {
 
                 entity_personas[e] = p;
                 document_persona_counts[d_e][p] += 1;
+                story_type_persona_counts[s_e][p] += 1;
+                //story_type_entity_counts[s_e] += 1;
                 for (int t : tuples) {
                     int topic_t = tuple_topics[t];
                     int role_t = tuple_role[t];
@@ -428,6 +640,7 @@ class ERLDASamplerClusters {
                     persona_counts[p_e] -= 1;
                     persona_topic_counts[p][topic_t] += 1;
                     persona_counts[p] += 1;
+
 
                     // update counts of words assoicated with each persona
                     int v_t = tuple_vocab[t];
@@ -461,15 +674,15 @@ class ERLDASamplerClusters {
 
                 // remove the counts for this word
                 persona_role_topic_counts[p_j][r_j][z_j] -= 1;
-                persona_topic_counts[p_j][z_j] -= 1;
                 topic_vocab_counts[z_j][v_j] -= 1;
+                topic_tuple_counts[z_j] -= 1;
                 topic_cluster_counts[z_j][c_j] -= 1;
                 topic_tuple_counts[z_j] -= 1;
 
                 // compute probabilities
                 double p_sum = 0;
                 for (int k = 0; k < n_topics; k++) {
-                    pr[k] = (persona_topic_counts[p_j][k] + beta) * (topic_cluster_counts[k][c_j] + gamma) / (topic_tuple_counts[k] + gamma * vocab_size);
+                    pr[k] = (persona_topic_counts[p_j][k] + beta) * (topic_cluster_counts[k][v_j] + gamma) / (topic_tuple_counts[k] + gamma * vocab_size);
                     //pr[k] = (topic_vocab_counts[k][v_j] + gamma) / (topic_tuple_counts[k] + gamma * vocab_size);
                     assert pr[k] > 0;
                     p_sum += pr[k];
@@ -486,15 +699,15 @@ class ERLDASamplerClusters {
 
                 tuple_topics[j] = k;
                 persona_role_topic_counts[p_j][r_j][k] += 1;
-                persona_topic_counts[p_j][k] += 1;
                 topic_vocab_counts[k][v_j] += 1;
+                topic_tuple_counts[k] += 1;
                 topic_cluster_counts[k][c_j] += 1;
                 topic_tuple_counts[k] += 1;
             }
 
             // keep running sums of the selected samples
-            if (i > burn_in) {
-                if (i % subsampling == 0) {
+            if (epoch > burn_in) {
+                if (epoch % subsampling == 0) {
                     System.out.print("-");
                     for (int p = 0; p < n_personas; p++) {
                         for (int r = 0; r < n_roles; r++) {
@@ -515,6 +728,9 @@ class ERLDASamplerClusters {
                         for (int v = 0; v < head_phrase_vocab_size; v++) {
                             t_persona_head_phrase_counts[p][v] += persona_head_phrase_counts[p][v];
                         }
+                        for (int s = 0; s < max_story_types; s++ ) {
+                            t_story_type_persona_counts[s][p] += story_type_persona_counts[s][p];
+                        }
                     }
                     for (int k = 0; k < n_topics; k++) {
                         t_topic_tuple_counts[k] += topic_tuple_counts[k];
@@ -524,10 +740,14 @@ class ERLDASamplerClusters {
                     for (int e = 0; e < n_entities; e++) {
                         t_entity_persona_counts[e][entity_personas[e]] += 1;
                     }
+                    for (int d = 0; d < n_docs; d++) {
+                        t_doc_story_type_counts[d][doc_story_type[d]] += 1;
+                    }
+
                 }
             }
-            else if (i % subsampling == 0) {
-                System.out.print(".");
+            else if (epoch % subsampling == 0) {
+                System.out.print(". ");
             }
 
         }
@@ -651,6 +871,28 @@ class ERLDASamplerClusters {
             }
         }
 
+        output_file = Paths.get(outputDir, "document_story_types.csv");
+        try (FileWriter file = new FileWriter(output_file.toString())) {
+            for (int d = 0; d < n_docs; d++) {
+                file.write(docs[d] + ',');
+                for (int s = 0; s < n_most_story_types_used; s++) {
+                    file.write(t_doc_story_type_counts[d][s] + ",");
+                }
+                file.write("\n");
+            }
+        }
+        output_file = Paths.get(outputDir, "persona_story_types.csv");
+        try (FileWriter file = new FileWriter(output_file.toString())) {
+            for (int p = 0; p < n_personas; p++) {
+                Integer p_num = p;
+                file.write(p_num.toString() + ',');
+                for (int s = 0; s < n_most_story_types_used; s++) {
+                    file.write(t_story_type_persona_counts[s][p] + ",");
+                }
+                file.write("\n");
+            }
+        }
+
         output_file = Paths.get(outputDir, "persona_head_phrase_counts.csv");
         try (FileWriter file = new FileWriter(output_file.toString())) {
             for (int v=0; v < head_phrase_vocab_size; v++) {
@@ -685,13 +927,13 @@ class ERLDASamplerClusters {
 
     private double calc_log_p_alpha(double alpha) {
         double log_p = Math.log(alpha)  ;
-        for (int d=0; d < n_docs; d++) {
-            for (int k=0; k < n_personas; k++) {
+        for (int s=0; s < n_story_types_used; s++) {
+            for (int p=0; p < n_personas; p++) {
                 //log_p += Math.log(partial_gamma(alpha + document_persona_counts[d][k], document_persona_counts[d][k]));
-                log_p += Gamma.logGamma(alpha + document_persona_counts[d][k]) - Gamma.logGamma(alpha);
+                log_p += Gamma.logGamma(alpha + story_type_persona_counts[s][p]) - Gamma.logGamma(alpha);
             }
             //log_p -= Math.log(partial_gamma(n_personas * alpha + document_persona_totals[d], document_persona_totals[d]));
-            log_p -= Gamma.logGamma(n_personas * alpha + document_persona_totals[d]) + Gamma.logGamma(n_personas * alpha);
+            log_p -= Gamma.logGamma(n_personas * alpha + story_type_entity_counts[s]) + Gamma.logGamma(n_personas * alpha);
         }
         return log_p;
     }
@@ -810,6 +1052,41 @@ class ERLDASamplerClusters {
         return gamma;
     }
 
+
+    // Calculate the likelihood of lambda given k instantiated clusters for n itesm using (Antoniak, 1974)
+    // l(\lambda|k) \propto \lambda^K \Gamma(\lambda) / \Gamma(\lambda + n)
+    private double calc_log_p_lambda(double lambda) {
+        return n_story_types_used * Math.log(lambda) + Gamma.logGamma(lambda) - Gamma.logGamma(lambda + n_docs);
+    }
+
+    private double slice_sample_lambda(double lambda, double slice_width) {
+        //System.out.println("Tuning lambda");
+        double log_p_current_lambda = calc_log_p_lambda(lambda);
+        double log_lambda = Math.log(lambda);
+        double u = Math.log(ThreadLocalRandom.current().nextDouble()) + log_p_current_lambda;
+        //System.out.println("current log p = " + log_p_current_lambda);
+        //System.out.println("Target log p = " + u);
+        double offset = ThreadLocalRandom.current().nextDouble();
+        double left = log_lambda - offset * slice_width;
+        double right = left + slice_width;
+        double new_log_lambda = left + ThreadLocalRandom.current().nextDouble() * (right - left);
+        double log_p_new_lambda = calc_log_p_lambda(Math.exp(new_log_lambda));
+        //System.out.println("Left:" + Math.exp(left) + " Right:" + Math.exp(right) + "; new lambda = " + Math.exp(new_log_lambda) + "; log p = " + log_p_new_lambda);
+        while (log_p_new_lambda < u) {
+            if (new_log_lambda < log_lambda) {
+                left = new_log_lambda;
+            } else {
+                right = new_log_lambda;
+            }
+            new_log_lambda = left + ThreadLocalRandom.current().nextDouble() * (right - left);
+            log_p_new_lambda = calc_log_p_lambda(Math.exp(new_log_lambda));
+            //System.out.println("Left:" + Math.exp(left) + " Right:" + Math.exp(right) + "; new lambda = " + Math.exp(new_log_lambda) + "; log p = " + log_p_new_lambda);
+        }
+        lambda = Math.exp(new_log_lambda);
+        //System.out.println("new lambda = " + lambda);
+        return lambda;
+    }
+
     // make sure we are able to write to the output directory
     private void test_dir(String outputDir) throws Exception {
         Path output_file = Paths.get(outputDir, "test.csv");
@@ -817,5 +1094,6 @@ class ERLDASamplerClusters {
             file.write("test\n");
         }
     }
+
 
 }
