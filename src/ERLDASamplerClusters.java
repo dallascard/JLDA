@@ -302,13 +302,13 @@ class ERLDASamplerClusters {
 
             tuple_topics[j] = k;
             persona_role_topic_counts[p_j][r_j][k] += 1;
-            topic_vocab_counts[k][v_j] += 1;
-            topic_cluster_counts[k][c_j] += 1;
             persona_role_counts[p_j][r_j] += 1;
-            topic_tuple_counts[k] += 1;
-            persona_role_vocab_counts[p_j][r_j][v_j] += 1;
             persona_topic_counts[p_j][k] += 1;
             persona_counts[p_j] += 1;
+            topic_vocab_counts[k][v_j] += 1;
+            topic_cluster_counts[k][c_j] += 1;
+            topic_tuple_counts[k] += 1;
+            persona_role_vocab_counts[p_j][r_j][v_j] += 1;
         }
 
         System.out.println(n_tuples + " tuples");
