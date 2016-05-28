@@ -641,7 +641,6 @@ class ERLDASamplerClustersWithDP {
                     persona_topic_counts[p][topic_t] += 1;
                     persona_counts[p] += 1;
 
-
                     // update counts of words assoicated with each persona
                     int v_t = tuple_vocab[t];
                     persona_role_vocab_counts[p_e][role_t][v_t] -= 1;
@@ -674,8 +673,8 @@ class ERLDASamplerClustersWithDP {
 
                 // remove the counts for this word
                 persona_role_topic_counts[p_j][r_j][z_j] -= 1;
+                persona_topic_counts[p_j][z_j] -= 1;
                 topic_vocab_counts[z_j][v_j] -= 1;
-                topic_tuple_counts[z_j] -= 1;
                 topic_cluster_counts[z_j][c_j] -= 1;
                 topic_tuple_counts[z_j] -= 1;
 
@@ -699,8 +698,8 @@ class ERLDASamplerClustersWithDP {
 
                 tuple_topics[j] = k;
                 persona_role_topic_counts[p_j][r_j][k] += 1;
+                persona_topic_counts[p_j][k] += 1;
                 topic_vocab_counts[k][v_j] += 1;
-                topic_tuple_counts[k] += 1;
                 topic_cluster_counts[k][c_j] += 1;
                 topic_tuple_counts[k] += 1;
             }
