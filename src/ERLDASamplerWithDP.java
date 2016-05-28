@@ -712,8 +712,10 @@ class ERLDASamplerWithDP {
                             t_persona_head_phrase_counts[p][v] += persona_head_phrase_counts[p][v];
                         }
                         for (int s = 0; s < max_story_types; s++ ) {
+                            t_story_type_persona_counts[s][p] += story_type_persona_counts[s][p];
+                        }
+                        for (int s = 0; s < n_story_types_used; s++) {
                             try {
-                                t_story_type_persona_counts[s][p] += story_type_persona_counts[s][p];
                                 System.out.println(s + ", " + story_type_index.get(s) + ", " + t_story_type_to_personas_map.get(story_type_index.get(s))[p]);
                                 t_story_type_to_personas_map.get(story_type_index.get(s))[p] += story_type_persona_counts[s][p];
                             }
