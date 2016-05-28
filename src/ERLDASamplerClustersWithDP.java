@@ -684,7 +684,9 @@ class ERLDASamplerClustersWithDP {
                     pr[k] = Math.exp(Math.log(persona_topic_counts[p_j][k] + beta) + Math.log(topic_cluster_counts[k][c_j] + gamma) - Math.log(topic_tuple_counts[k] + gamma * vocab_size));
                     //pr[k] = (persona_topic_counts[p_j][k] + beta) * (topic_cluster_counts[k][c_j] + gamma) / (topic_tuple_counts[k] + gamma * vocab_size);
                     //pr[k] = (topic_vocab_counts[k][v_j] + gamma) / (topic_tuple_counts[k] + gamma * vocab_size);
-                    assert pr[k] > 0;
+                    if (pr[k] <= 0) {
+                        System.out.println(epoch + ", " + q + ", " + k + ", " + pr[k]);
+                    }
                     p_sum += pr[k];
                 }
 
