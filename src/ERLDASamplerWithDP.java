@@ -301,9 +301,6 @@ class ERLDASamplerWithDP {
             t_doc_story_type_lists.add(new ArrayList<>());
         }
 
-        //t_story_type_personas_list_counts = new ArrayList<>(n_personas);
-
-
         // do random initalization
         for (int e=0; e < n_entities; e++) {
             int d_e = entity_doc[e];
@@ -716,6 +713,7 @@ class ERLDASamplerWithDP {
                         }
                         for (int s = 0; s < max_story_types; s++ ) {
                             t_story_type_persona_counts[s][p] += story_type_persona_counts[s][p];
+                            System.out.println(s + ", " + story_type_index.get(s) + ", " + t_story_type_to_personas_map.get(story_type_index.get(s))[p]);
                             t_story_type_to_personas_map.get(story_type_index.get(s))[p] += story_type_persona_counts[s][p];
                         }
                     }
