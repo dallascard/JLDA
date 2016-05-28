@@ -689,6 +689,10 @@ class ERLDASamplerClustersWithDP {
                     }
                     catch (AssertionError e) {
                         System.out.println(epoch + ", " + q + ", " + k + ", " + pr[k] + "\n");
+                        System.out.println(persona_topic_counts[p_j][k]);
+                        System.out.println(topic_cluster_counts[k][c_j]);
+                        System.out.println(topic_tuple_counts[k]);
+                        System.exit(0);
                     }
                     p_sum += pr[k];
                 }
