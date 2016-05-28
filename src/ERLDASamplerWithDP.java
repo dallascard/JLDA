@@ -865,7 +865,7 @@ class ERLDASamplerWithDP {
         try (FileWriter file = new FileWriter(output_file.toString())) {
             for (int d = 0; d < n_docs; d++) {
                 file.write(docs[d] + ',');
-                for (int s = 0; s < n_most_story_types_used; s++) {
+                for (int s = 0; s < n_story_types_used; s++) {
                     file.write(t_doc_story_type_counts[d][s] + ",");
                 }
                 file.write("\n");
@@ -893,7 +893,7 @@ class ERLDASamplerWithDP {
             for (int p = 0; p < n_personas; p++) {
                 Integer p_num = p;
                 file.write(p_num.toString() + ',');
-                for (int s = 0; s < n_most_story_types_used; s++) {
+                for (int s = 0; s < n_story_types_used; s++) {
                     file.write(t_story_type_persona_counts[s][p] + ",");
                 }
                 file.write("\n");
