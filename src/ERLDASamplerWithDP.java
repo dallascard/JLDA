@@ -1,10 +1,12 @@
 import cern.jet.stat.tdouble.Gamma;
+import javafx.beans.property.IntegerProperty;
 import org.json.simple.JSONArray;
 import org.json.simple.parser.JSONParser;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ThreadLocalRandom;
 import java.nio.file.Path;
 
@@ -67,8 +69,7 @@ class ERLDASamplerWithDP {
     private int story_type_persona_counts[][];
     private int story_type_entity_counts[];
     private int story_type_doc_counts[];
-    //private HashMap<Integer, Integer>  story_type_index;
-    //private ArrayList<int[]> story_type_persona_counts;
+    private HashMap<Integer, Integer>  story_type_index;
 
     private int t_document_persona_counts[][];
     private int t_persona_role_topic_counts[][][];
@@ -81,6 +82,8 @@ class ERLDASamplerWithDP {
     private int t_persona_head_phrase_counts[][];
     private int t_story_type_persona_counts[][];
     private int t_doc_story_type_counts[][];
+    private List<List<Integer>> t_doc_story_type_lists;
+    private HashMap<Integer, int[]> t_story_type_to_personas_map;
 
     public ERLDASamplerWithDP(String input_dir) throws Exception {
 
@@ -276,6 +279,7 @@ class ERLDASamplerWithDP {
         story_type_persona_counts = new int[max_story_types][n_personas];
         story_type_entity_counts = new int[max_story_types];
         story_type_doc_counts = new int[max_story_types];
+        story_type_index = new HashMap<>();
 
         persona_head_word_counts = new int[n_personas][head_word_vocab_size];
         persona_head_phrase_counts = new int[n_personas][head_phrase_vocab_size];
@@ -291,6 +295,14 @@ class ERLDASamplerWithDP {
         t_story_type_persona_counts = new int[max_story_types][n_personas];
         t_doc_story_type_counts = new int[n_docs][max_story_types];
         t_persona_head_phrase_counts= new int[n_personas][head_phrase_vocab_size];
+        t_doc_story_type_lists = new ArrayList<>(n_docs);
+        t_story_type_to_personas_map = new HashMap<>();
+
+        //t_story_type_personas_list_counts = new ArrayList<>(n_personas);
+
+        // test REMOVE ME
+        t_doc_story_type_lists.get(1).add(1);
+
 
         // do random initalization
         for (int e=0; e < n_entities; e++) {
@@ -328,6 +340,8 @@ class ERLDASamplerWithDP {
             story_type_persona_counts[s_0][p_e] += 1;
             story_type_entity_counts[s_0] += 1;
         }
+        story_type_index.put(0, s_0);
+        t_story_type_to_personas_map.put(s_0, new int[n_personas]);
         n_story_types_used = 1;
 
         for (int i = 1; i < n_docs; i++) {
@@ -384,8 +398,9 @@ class ERLDASamplerWithDP {
             }
             if (s == s_new) {
                 n_story_types_used += 1;
+                story_type_index.put(s, s);
+                t_story_type_to_personas_map.put(s, new int[n_personas]);
             }
-
         }
         n_most_story_types_used = n_story_types_used;
 
@@ -475,6 +490,9 @@ class ERLDASamplerWithDP {
                             doc_story_type[i2] = s_i;
                         }
                     }
+                    t_story_type_to_personas_map.remove(story_type_index.get(s_i));
+                    story_type_index.put(s_i, story_type_index.get(s_last));
+                    story_type_index.remove(s_last);
                 }
 
                 // now sample a new story type for this document
@@ -532,12 +550,11 @@ class ERLDASamplerWithDP {
                 if (s == s_new) {
                     //System.out.println("Creating new story type");
                     n_story_types_used += 1;
-                }
+                    story_type_index.put(s, n_most_story_types_used);
+                    t_story_type_to_personas_map.put(n_most_story_types_used, new int[n_personas]);
+                    n_most_story_types_used += 1;
 
-                if (n_story_types_used > n_most_story_types_used) {
-                    n_most_story_types_used = n_story_types_used;
                 }
-
             }
 
             // then sample personas
@@ -699,6 +716,7 @@ class ERLDASamplerWithDP {
                         }
                         for (int s = 0; s < max_story_types; s++ ) {
                             t_story_type_persona_counts[s][p] += story_type_persona_counts[s][p];
+                            t_story_type_to_personas_map.get(story_type_index.get(s))[p] += story_type_persona_counts[s][p];
                         }
                     }
                     for (int k = 0; k < n_topics; k++) {
@@ -711,6 +729,7 @@ class ERLDASamplerWithDP {
                     }
                     for (int d = 0; d < n_docs; d++) {
                         t_doc_story_type_counts[d][doc_story_type[d]] += 1;
+                        t_doc_story_type_lists.get(d).add(story_type_index.get(doc_story_type[d]));
                     }
 
                 }
@@ -853,6 +872,23 @@ class ERLDASamplerWithDP {
                 file.write("\n");
             }
         }
+
+        output_file = Paths.get(outputDir, "document_story_types_new.csv");
+        try (FileWriter file = new FileWriter(output_file.toString())) {
+            for (int d = 0; d < n_docs; d++) {
+                file.write(docs[d] + ',');
+                int [] ds_counts = new int[n_most_story_types_used];
+                List<Integer> ds_list = t_doc_story_type_lists.get(d);
+                for (int i : ds_list) {
+                    ds_counts[i] += 1;
+                }
+                for (int s = 0; s < n_most_story_types_used; s++) {
+                    file.write(ds_counts[s] + ",");
+                }
+                file.write("\n");
+            }
+        }
+
         output_file = Paths.get(outputDir, "persona_story_types.csv");
         try (FileWriter file = new FileWriter(output_file.toString())) {
             for (int p = 0; p < n_personas; p++) {
@@ -862,6 +898,25 @@ class ERLDASamplerWithDP {
                     file.write(t_story_type_persona_counts[s][p] + ",");
                 }
                 file.write("\n");
+            }
+        }
+
+        output_file = Paths.get(outputDir, "persona_story_types_new.csv");
+        try (FileWriter file = new FileWriter(output_file.toString())) {
+            for (int p = 0; p < n_personas; p++) {
+                Integer p_num = p;
+                file.write(p_num.toString() + ',');
+                for (int s : story_type_index.values()) {
+                    file.write(t_story_type_to_personas_map.get(s)[p] + ",");
+                }
+                file.write("\n");
+            }
+        }
+
+        output_file = Paths.get(outputDir, "story_types.csv");
+        try (FileWriter file = new FileWriter(output_file.toString())) {
+            for (int s : story_type_index.keySet()) {
+                file.write(s + "," + story_type_index.get(s) + "\n");
             }
         }
 
