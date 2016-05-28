@@ -681,7 +681,8 @@ class ERLDASamplerClustersWithDP {
                 // compute probabilities
                 double p_sum = 0;
                 for (int k = 0; k < n_topics; k++) {
-                    pr[k] = (persona_topic_counts[p_j][k] + beta) * (topic_cluster_counts[k][c_j] + gamma) / (topic_tuple_counts[k] + gamma * vocab_size);
+                    pr[k] = Math.exp(Math.log(persona_topic_counts[p_j][k] + beta) + Math.log(topic_cluster_counts[k][c_j] + gamma) - Math.log(topic_tuple_counts[k] + gamma * vocab_size));
+                    //pr[k] = (persona_topic_counts[p_j][k] + beta) * (topic_cluster_counts[k][c_j] + gamma) / (topic_tuple_counts[k] + gamma * vocab_size);
                     //pr[k] = (topic_vocab_counts[k][v_j] + gamma) / (topic_tuple_counts[k] + gamma * vocab_size);
                     assert pr[k] > 0;
                     p_sum += pr[k];
