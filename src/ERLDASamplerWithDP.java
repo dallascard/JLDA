@@ -712,9 +712,17 @@ class ERLDASamplerWithDP {
                             t_persona_head_phrase_counts[p][v] += persona_head_phrase_counts[p][v];
                         }
                         for (int s = 0; s < max_story_types; s++ ) {
-                            t_story_type_persona_counts[s][p] += story_type_persona_counts[s][p];
-                            System.out.println(s + ", " + story_type_index.get(s) + ", " + t_story_type_to_personas_map.get(story_type_index.get(s))[p]);
-                            t_story_type_to_personas_map.get(story_type_index.get(s))[p] += story_type_persona_counts[s][p];
+                            try {
+                                t_story_type_persona_counts[s][p] += story_type_persona_counts[s][p];
+                                System.out.println(s + ", " + story_type_index.get(s) + ", " + t_story_type_to_personas_map.get(story_type_index.get(s))[p]);
+                                t_story_type_to_personas_map.get(story_type_index.get(s))[p] += story_type_persona_counts[s][p];
+                            }
+                            catch(Exception e) {
+                                System.out.println(s);
+                                System.out.println(story_type_index.get(s));
+                                System.out.println(t_story_type_to_personas_map.get(story_type_index.get(s))[p]);
+                                System.exit(-1);
+                            }
                         }
                     }
                     for (int k = 0; k < n_topics; k++) {
