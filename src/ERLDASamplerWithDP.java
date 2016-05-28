@@ -295,13 +295,13 @@ class ERLDASamplerWithDP {
         t_story_type_persona_counts = new int[max_story_types][n_personas];
         t_doc_story_type_counts = new int[n_docs][max_story_types];
         t_persona_head_phrase_counts= new int[n_personas][head_phrase_vocab_size];
-        t_doc_story_type_lists = new ArrayList<>(n_docs);
         t_story_type_to_personas_map = new HashMap<>();
+        t_doc_story_type_lists = new ArrayList<>(n_docs);
+        for (int d = 0; d < n_docs; d++) {
+            t_doc_story_type_lists.add(new ArrayList<>());
+        }
 
         //t_story_type_personas_list_counts = new ArrayList<>(n_personas);
-
-        // test REMOVE ME
-        t_doc_story_type_lists.get(1).add(1);
 
 
         // do random initalization
