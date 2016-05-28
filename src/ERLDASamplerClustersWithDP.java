@@ -687,7 +687,7 @@ class ERLDASamplerClustersWithDP {
                     try {
                         assert pr[k] > 0;
                     }
-                    catch (Exception e) {
+                    catch (AssertionError e) {
                         System.out.println(epoch + ", " + q + ", " + k + ", " + pr[k] + "\n");
                     }
                     p_sum += pr[k];
