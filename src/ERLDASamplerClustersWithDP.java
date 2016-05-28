@@ -687,6 +687,7 @@ class ERLDASamplerClustersWithDP {
                     if (pr[k] <= 0) {
                         System.out.println(epoch + ", " + q + ", " + k + ", " + pr[k]);
                     }
+                    assert pr[k] > 0;
                     p_sum += pr[k];
                 }
 
