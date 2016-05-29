@@ -69,7 +69,7 @@ class ERLDASamplerWithDP {
     private int story_type_persona_counts[][];
     private int story_type_entity_counts[];
     private int story_type_doc_counts[];
-    private HashMap<Integer, Integer>  story_type_index;
+    //private HashMap<Integer, Integer>  story_type_index;
 
     private int t_document_persona_counts[][];
     private int t_persona_role_topic_counts[][][];
@@ -82,8 +82,8 @@ class ERLDASamplerWithDP {
     private int t_persona_head_phrase_counts[][];
     private int t_story_type_persona_counts[][];
     private int t_doc_story_type_counts[][];
-    private List<List<Integer>> t_doc_story_type_lists;
-    private HashMap<Integer, int[]> t_story_type_to_personas_map;
+    //private List<List<Integer>> t_doc_story_type_lists;
+    //private HashMap<Integer, int[]> t_story_type_to_personas_map;
 
     public ERLDASamplerWithDP(String input_dir) throws Exception {
 
@@ -279,7 +279,7 @@ class ERLDASamplerWithDP {
         story_type_persona_counts = new int[max_story_types][n_personas];
         story_type_entity_counts = new int[max_story_types];
         story_type_doc_counts = new int[max_story_types];
-        story_type_index = new HashMap<>();
+        //story_type_index = new HashMap<>();
 
         persona_head_word_counts = new int[n_personas][head_word_vocab_size];
         persona_head_phrase_counts = new int[n_personas][head_phrase_vocab_size];
@@ -295,11 +295,11 @@ class ERLDASamplerWithDP {
         t_story_type_persona_counts = new int[max_story_types][n_personas];
         t_doc_story_type_counts = new int[n_docs][max_story_types];
         t_persona_head_phrase_counts= new int[n_personas][head_phrase_vocab_size];
-        t_story_type_to_personas_map = new HashMap<>();
-        t_doc_story_type_lists = new ArrayList<>(n_docs);
-        for (int d = 0; d < n_docs; d++) {
-            t_doc_story_type_lists.add(new ArrayList<>());
-        }
+        //t_story_type_to_personas_map = new HashMap<>();
+        //t_doc_story_type_lists = new ArrayList<>(n_docs);
+        //for (int d = 0; d < n_docs; d++) {
+        //    t_doc_story_type_lists.add(new ArrayList<>());
+        //}
 
         // do random initalization
         for (int e=0; e < n_entities; e++) {
@@ -337,8 +337,8 @@ class ERLDASamplerWithDP {
             story_type_persona_counts[s_0][p_e] += 1;
             story_type_entity_counts[s_0] += 1;
         }
-        story_type_index.put(0, s_0);
-        t_story_type_to_personas_map.put(s_0, new int[n_personas]);
+        //story_type_index.put(0, s_0);
+        //t_story_type_to_personas_map.put(s_0, new int[n_personas]);
         n_story_types_used = 1;
 
         for (int i = 1; i < n_docs; i++) {
@@ -395,8 +395,8 @@ class ERLDASamplerWithDP {
             }
             if (s == s_new) {
                 n_story_types_used += 1;
-                story_type_index.put(s, s);
-                t_story_type_to_personas_map.put(s, new int[n_personas]);
+                //story_type_index.put(s, s);
+                //t_story_type_to_personas_map.put(s, new int[n_personas]);
             }
         }
         n_most_story_types_used = n_story_types_used;
@@ -480,16 +480,20 @@ class ERLDASamplerWithDP {
                     for (int p = 0; p < n_personas; p++) {
                         story_type_persona_counts[s_i][p] = story_type_persona_counts[s_last][p];
                         story_type_persona_counts[s_last][p] = 0;
+                        t_story_type_persona_counts[s_i][p] = t_story_type_persona_counts[s_last][p];
+                        t_story_type_persona_counts[s_last][p] = 0;
                     }
                     // update assigments
-                    for (int i2 = 0; i2 < n_docs; i2++ )  {
-                        if (doc_story_type[i2] == s_last)  {
-                            doc_story_type[i2] = s_i;
+                    for (int d = 0; d < n_docs; d++) {
+                        t_doc_story_type_counts[d][s_i] = t_doc_story_type_counts[d][s_last];
+                        t_doc_story_type_counts[d][s_last] = 0;
+                        if (doc_story_type[d] == s_last)  {
+                            doc_story_type[d] = s_i;
                         }
                     }
-                    t_story_type_to_personas_map.remove(story_type_index.get(s_i));
-                    story_type_index.put(s_i, story_type_index.get(s_last));
-                    story_type_index.remove(s_last);
+                    //t_story_type_to_personas_map.remove(story_type_index.get(s_i));
+                    //story_type_index.put(s_i, story_type_index.get(s_last));
+                    //story_type_index.remove(s_last);
                 }
 
                 // now sample a new story type for this document
@@ -547,8 +551,8 @@ class ERLDASamplerWithDP {
                 if (s == s_new) {
                     //System.out.println("Creating new story type");
                     n_story_types_used += 1;
-                    story_type_index.put(s, n_most_story_types_used);
-                    t_story_type_to_personas_map.put(n_most_story_types_used, new int[n_personas]);
+                    //story_type_index.put(s, n_most_story_types_used);
+                    //t_story_type_to_personas_map.put(n_most_story_types_used, new int[n_personas]);
                     n_most_story_types_used += 1;
 
                 }
@@ -714,9 +718,9 @@ class ERLDASamplerWithDP {
                         for (int s = 0; s < max_story_types; s++ ) {
                             t_story_type_persona_counts[s][p] += story_type_persona_counts[s][p];
                         }
-                        for (int s = 0; s < n_story_types_used; s++) {
-                            t_story_type_to_personas_map.get(story_type_index.get(s))[p] += story_type_persona_counts[s][p];
-                        }
+                        //for (int s = 0; s < n_story_types_used; s++) {
+                        //    t_story_type_to_personas_map.get(story_type_index.get(s))[p] += story_type_persona_counts[s][p];
+                        //}
                     }
                     for (int k = 0; k < n_topics; k++) {
                         t_topic_tuple_counts[k] += topic_tuple_counts[k];
@@ -728,7 +732,7 @@ class ERLDASamplerWithDP {
                     }
                     for (int d = 0; d < n_docs; d++) {
                         t_doc_story_type_counts[d][doc_story_type[d]] += 1;
-                        t_doc_story_type_lists.get(d).add(story_type_index.get(doc_story_type[d]));
+                        //t_doc_story_type_lists.get(d).add(story_type_index.get(doc_story_type[d]));
                     }
 
                 }
@@ -772,6 +776,8 @@ class ERLDASamplerWithDP {
             }
             System.out.println("");
         }
+
+        System.out.println("Total number of story types created = " + n_most_story_types_used);
 
         /*
         for (int p=0; p < n_personas; p++) {
@@ -872,6 +878,7 @@ class ERLDASamplerWithDP {
             }
         }
 
+        /*
         output_file = Paths.get(outputDir, "document_story_types_new.csv");
         try (FileWriter file = new FileWriter(output_file.toString())) {
             for (int d = 0; d < n_docs; d++) {
@@ -887,6 +894,7 @@ class ERLDASamplerWithDP {
                 file.write("\n");
             }
         }
+        */
 
         output_file = Paths.get(outputDir, "persona_story_types.csv");
         try (FileWriter file = new FileWriter(output_file.toString())) {
@@ -900,6 +908,7 @@ class ERLDASamplerWithDP {
             }
         }
 
+        /*
         output_file = Paths.get(outputDir, "persona_story_types_new.csv");
         try (FileWriter file = new FileWriter(output_file.toString())) {
             for (int p = 0; p < n_personas; p++) {
@@ -918,6 +927,7 @@ class ERLDASamplerWithDP {
                 file.write(s + "," + story_type_index.get(s) + "\n");
             }
         }
+        */
 
         output_file = Paths.get(outputDir, "persona_head_phrase_counts.csv");
         try (FileWriter file = new FileWriter(output_file.toString())) {
