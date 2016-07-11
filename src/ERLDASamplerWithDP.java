@@ -1,20 +1,12 @@
 import cern.jet.stat.tdouble.Gamma;
-import javafx.beans.property.IntegerProperty;
 import org.json.simple.JSONArray;
 import org.json.simple.parser.JSONParser;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.nio.file.Paths;
 import java.util.*;
-import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ThreadLocalRandom;
 import java.nio.file.Path;
-
-import cern.colt.matrix.tdouble.DoubleMatrix1D;
-import cern.colt.matrix.tdouble.DoubleMatrix2D;
-import cern.colt.matrix.tdouble.impl.DenseDoubleMatrix1D;
-import cern.colt.matrix.tdouble.impl.DenseDoubleMatrix2D;
-
 
 
 class ERLDASamplerWithDP {
