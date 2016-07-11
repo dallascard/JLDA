@@ -565,7 +565,6 @@ class ERLDASamplerWithDP {
                 for (int p=0; p < n_personas; p++) {
                     pr[p] = Math.log(story_type_persona_counts[s_e][p] + alpha);
                 }
-                System.out.println(e);
                 List<Integer> tuples = entity_tuples.get(e);
                 assert tuples != null;
                 for (int t : tuples) {
