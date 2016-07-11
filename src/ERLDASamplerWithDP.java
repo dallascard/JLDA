@@ -567,6 +567,7 @@ class ERLDASamplerWithDP {
                 }
                 List<Integer> tuples = entity_tuples.get(e);
                 assert tuples != null;
+                System.out.println(tuples);
                 for (int t : tuples) {
                     int topic_t = tuple_topics[t];
                     int role_t = tuple_role[t];
