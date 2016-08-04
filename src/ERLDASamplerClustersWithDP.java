@@ -129,6 +129,9 @@ class ERLDASamplerClustersWithDP {
         n_head_phrases = head_phrase_vocab_json.size();
         System.out.println("n_head_phrases=" + n_head_phrases);
 
+        int test = tuple_role_json.size();
+        System.out.println("tuple_role_json.size() = " + test);
+
         // transfer entity to document mapping from json to array, and count the number of documents
         n_docs = 0;
         doc_entities = new HashMap<>();
