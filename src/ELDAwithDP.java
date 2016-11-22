@@ -18,7 +18,7 @@ public class ELDAwithDP {
         params.put("-i", "11000");                    // n_iter
         params.put("-u", "10000");                     // burn_in
         params.put("-s", "10");                      // subsampling
-        params.put("-w", "10.0");                      // subsampling
+        params.put("-w", "10.0");                      // slice width for slice sampling
         params.put("-t", "5000");                // max story types
 
         String arg = null;
