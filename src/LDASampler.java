@@ -34,12 +34,12 @@ public class LDASampler {
     int t_doc_topics[][];
 
 
-    public LDASampler(Path word_file, Path doc_file, Path vocab_file, Path documents_file) throws Exception {
+    public LDASampler(Path word_file, Path word_doc_file, Path vocab_file, Path documents_file) throws Exception {
         JSONParser parser = new JSONParser();
         JSONArray words = (JSONArray) parser.parse(new FileReader(word_file.toString()));
-        JSONArray docs = (JSONArray) parser.parse(new FileReader(doc_file.toString()));
+        JSONArray docs = (JSONArray) parser.parse(new FileReader(word_doc_file.toString()));
         JSONArray vocab_json = (JSONArray) parser.parse(new FileReader(vocab_file.toString()));
-        JSONArray documents_json = (JSONArray) parser.parse(new FileReader(vocab_file.toString()));
+        JSONArray documents_json = (JSONArray) parser.parse(new FileReader(documents_file.toString()));
 
         n_words = words.size();
 

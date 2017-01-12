@@ -59,7 +59,7 @@ public class LDA {
         int vocab_size = (int) word_topic_matrix.length;
         System.out.println(vocab_size);
 
-        outputSamples(n_topics, vocab_size, params.get("-o"), sampler, word_topic_matrix);
+        //outputSamples(n_topics, vocab_size, params.get("-o"), sampler, word_topic_matrix);
 
     }
 
