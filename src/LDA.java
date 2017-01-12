@@ -13,6 +13,7 @@ public class LDA {
 
         // set defaults
         params.put("-d", "");  // input dir
+        params.put("-o", ".");  // input dir
         params.put("-k", "50");                     // n_topics
         params.put("-a", "1");                      // alpha
         params.put("-b", "1");                      // beta
@@ -57,12 +58,9 @@ public class LDA {
 
         String vocab[] = LDASampler.get_vocab();
 
-        // TODO: redo this in a safe way
-        /*
         System.out.println("Writing results to file");
-        //String output_dir = "/Users/dcard/Projects/CMU/ARK/guac/datasets/mfc_v2/lda/";
         for (int k=0; k < n_topics; k++) {
-            Path output_file = Paths.get(params.get("-d"), k + ".json");
+            Path output_file = Paths.get(params.get("-o"), k + ".json");
             JSONObject obj = new JSONObject();
 
             for (int v=0; v < vocab_size; v++)
@@ -72,7 +70,6 @@ public class LDA {
                 file.write(obj.toJSONString());
             }
         }
-        */
 
     }
 

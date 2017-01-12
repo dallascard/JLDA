@@ -80,8 +80,8 @@ class ERLDASamplerWithDP {
     public ERLDASamplerWithDP(String input_dir) throws Exception {
 
         Path tuple_vocab_file = Paths.get(input_dir, "tuple_vocab.json");
-        Path tuple_entity_file = Paths.get(input_dir, "tuple_entity.json");
         Path tuple_role_file = Paths.get(input_dir, "tuple_role.json");
+        Path tuple_entity_file = Paths.get(input_dir, "tuple_entity.json");
         Path entity_doc_file = Paths.get(input_dir, "entity_doc.json");
         Path vocab_file = Paths.get(input_dir, "vocab.json");
         Path docs_file = Paths.get(input_dir, "docs.json");
