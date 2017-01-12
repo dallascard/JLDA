@@ -42,6 +42,7 @@ public class LDA {
         Path word_num_file = Paths.get(params.get("-d"), "word_num.json");
         Path word_doc_file = Paths.get(params.get("-d"), "word_doc.json");
         Path vocab_file = Paths.get(params.get("-d"), "vocab.json");
+        Path documents_file = Paths.get(params.get("-d"), "documents.json");
 
         float alpha = Float.parseFloat(params.get("-a"));
         float beta = Float.parseFloat(params.get("-b"));
@@ -51,8 +52,10 @@ public class LDA {
         int burn_in = Integer.parseInt(params.get("-u"));
         int subsampling = Integer.parseInt(params.get("-s"));
 
-        LDASampler sampler = new LDASampler(word_num_file, word_doc_file, vocab_file);
-        int word_topic_matrix[][] = sampler.run(n_topics, alpha, beta, n_iter, burn_in, subsampling);
+        String outputDir = params.get("-o");
+
+        LDASampler sampler = new LDASampler(word_num_file, word_doc_file, vocab_file, documents_file);
+        int word_topic_matrix[][] = sampler.run(n_topics, alpha, beta, n_iter, burn_in, subsampling, outputDir);
         int vocab_size = (int) word_topic_matrix.length;
         System.out.println(vocab_size);
 
@@ -60,6 +63,7 @@ public class LDA {
 
     }
 
+    // suppressing unchecked warning because putting something in a JSONObject apparently throws an unchecked error
     @SuppressWarnings("unchecked")
     static void outputSamples(int n_topics, int vocab_size, String outputDir, LDASampler sampler, int[][] word_topic_matrix)  throws Exception {
 

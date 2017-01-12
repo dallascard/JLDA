@@ -1,6 +1,8 @@
 import org.json.simple.JSONArray;
 import org.json.simple.parser.JSONParser;
 import java.io.FileReader;
+import java.io.FileWriter;
+import java.nio.file.Paths;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.ArrayList;
 import java.util.List;
@@ -20,6 +22,7 @@ public class LDASampler {
     int doc_assignments[];
     int vocab_assignments[];
     String vocab[];
+    String documents[];
 
     int topic_assignments[];
     int topic_counts[];
@@ -31,11 +34,12 @@ public class LDASampler {
     int t_doc_topics[][];
 
 
-    public LDASampler(Path word_file, Path doc_file, Path vocab_file) throws Exception {
+    public LDASampler(Path word_file, Path doc_file, Path vocab_file, Path documents_file) throws Exception {
         JSONParser parser = new JSONParser();
         JSONArray words = (JSONArray) parser.parse(new FileReader(word_file.toString()));
         JSONArray docs = (JSONArray) parser.parse(new FileReader(doc_file.toString()));
         JSONArray vocab_json = (JSONArray) parser.parse(new FileReader(vocab_file.toString()));
+        JSONArray documents_json = (JSONArray) parser.parse(new FileReader(vocab_file.toString()));
 
         n_words = words.size();
 
@@ -65,13 +69,18 @@ public class LDASampler {
             vocab[i] = (String) vocab_json.get(i);
         }
 
+        documents = new String[n_docs];
+        for (int d = 0; d < n_docs; d++) {
+            documents[d] = (String) documents_json.get(d);
+        }
+
     }
 
     public String[] get_vocab() {
         return vocab;
     }
 
-    public int[][] run(int n_topics, float alpha, float beta, int n_iter, int burn_in, int subsampling) {
+    public int[][] run(int n_topics, float alpha, float beta, int n_iter, int burn_in, int subsampling, String outputDir) throws Exception {
         this.n_topics = n_topics;
         this.alpha = alpha;
         this.beta = beta;
@@ -152,16 +161,17 @@ public class LDASampler {
 
 
             if (i % subsampling == 0) {
-                if (i > burn_in)
-                    System.out.print(".");
-                else
+                if (i < burn_in)
                     System.out.print("-");
-                for (int k = 0; k < n_topics; k++) {
-                    t_topic_counts[k] += topic_counts[k];
-                    for (int d = 0; d < n_docs; d++)
-                        t_doc_topics[d][k] += doc_topics[d][k];
-                    for (int v = 0; v < vocab_size; v++)
-                        t_vocab_topics[v][k] += vocab_topics[v][k];
+                else {
+                    System.out.print(".");
+                    for (int k = 0; k < n_topics; k++) {
+                        t_topic_counts[k] += topic_counts[k];
+                        for (int d = 0; d < n_docs; d++)
+                            t_doc_topics[d][k] += doc_topics[d][k];
+                        for (int v = 0; v < vocab_size; v++)
+                            t_vocab_topics[v][k] += vocab_topics[v][k];
+                    }
                 }
             }
         }
@@ -181,6 +191,30 @@ public class LDASampler {
             for (int v = 0; v < vocab_size; v++) {
                 if (t_vocab_topics[v][k] >= threshold)
                     System.out.println(vocab[v] + ": " + t_vocab_topics[v][k]);
+            }
+        }
+
+        // save relevant things to disk
+        Path output_file = Paths.get(outputDir, "document_topics.csv");
+        try (FileWriter file = new FileWriter(output_file.toString())) {
+            for (int d=0; d < n_docs; d++) {
+                file.write(documents[d] + ',');
+                for (int k=0; k < n_topics; k++) {
+                    file.write(t_doc_topics[d][k] + ",");
+                }
+                file.write("\n");
+            }
+        }
+
+        // save relevant things to disk
+        output_file = Paths.get(outputDir, "vocab_topics.csv");
+        try (FileWriter file = new FileWriter(output_file.toString())) {
+            for (int v=0; v < vocab_size; v++) {
+                file.write(vocab[v] + ',');
+                for (int k=0; k < n_topics; k++) {
+                    file.write(t_vocab_topics[v][k] + ",");
+                }
+                file.write("\n");
             }
         }
 
