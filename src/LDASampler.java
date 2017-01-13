@@ -64,6 +64,8 @@ public class LDASampler {
         }
         n_docs += 1;
 
+        System.out.println(n_docs + " documents");
+
         vocab = new String[vocab_size];
         for (int i = 0; i < vocab_size; i++) {
             vocab[i] = (String) vocab_json.get(i);
@@ -198,9 +200,9 @@ public class LDASampler {
         Path output_file = Paths.get(outputDir, "document_topics.csv");
         try (FileWriter file = new FileWriter(output_file.toString())) {
             for (int d=0; d < n_docs; d++) {
-                file.write(documents[d] + ',');
+                file.write(documents[d] + '\t');
                 for (int k=0; k < n_topics; k++) {
-                    file.write(t_doc_topics[d][k] + ",");
+                    file.write(t_doc_topics[d][k] + "\t");
                 }
                 file.write("\n");
             }
@@ -210,9 +212,9 @@ public class LDASampler {
         output_file = Paths.get(outputDir, "vocab_topics.csv");
         try (FileWriter file = new FileWriter(output_file.toString())) {
             for (int v=0; v < vocab_size; v++) {
-                file.write(vocab[v] + ',');
+                file.write(vocab[v] + '\t');
                 for (int k=0; k < n_topics; k++) {
-                    file.write(t_vocab_topics[v][k] + ",");
+                    file.write(t_vocab_topics[v][k] + "\t");
                 }
                 file.write("\n");
             }
