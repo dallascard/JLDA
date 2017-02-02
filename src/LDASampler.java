@@ -197,6 +197,7 @@ public class LDASampler {
         }
 
         // save relevant things to disk
+        System.out.println("Writing document_topics.csv");
         Path output_file = Paths.get(outputDir, "document_topics.csv");
         try (FileWriter file = new FileWriter(output_file.toString())) {
             for (int d=0; d < n_docs; d++) {
@@ -209,6 +210,7 @@ public class LDASampler {
         }
 
         // save relevant things to disk
+        System.out.println("Writing vocab_topics.csv");
         output_file = Paths.get(outputDir, "vocab_topics.csv");
         try (FileWriter file = new FileWriter(output_file.toString())) {
             for (int v=0; v < vocab_size; v++) {

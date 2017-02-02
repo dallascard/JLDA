@@ -13,7 +13,7 @@ public class LDA {
 
         // set defaults
         params.put("-d", "");  // input dir
-        params.put("-o", ".");  // input dir
+        params.put("-o", ".");  // output dir
         params.put("-k", "50");                     // n_topics
         params.put("-a", "1");                      // alpha
         params.put("-b", "1");                      // beta
